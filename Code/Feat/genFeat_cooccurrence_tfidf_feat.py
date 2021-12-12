@@ -168,4 +168,60 @@ if __name__ == "__main__":
         ## so we switch trainInd and validInd
         for fold, (validInd, trainInd) in enumerate(skf[run]):
             print("Run: %d, Fold: %d" % (run+1, fold+1))
-            path = "%s/Run%d/Fold%d" % 
+            path = "%s/Run%d/Fold%d" % (config.feat_folder, run+1, fold+1)
+                
+            for feat_name,column_name in zip(feat_names, column_names):
+                print "generate %s feat" % feat_name
+                ## tfidf
+                tfv = getTFV(ngram_range=ngram_range)
+                X_tfidf_train = tfv.fit_transform(dfTrain.iloc[trainInd][column_name])
+                X_tfidf_valid = tfv.transform(dfTrain.iloc[validInd][column_name])
+                with open("%s/train.%s.feat.pkl" % (path, feat_name), "wb") as f:
+                    cPickle.dump(X_tfidf_train, f, -1)
+                with open("%s/valid.%s.feat.pkl" % (path, feat_name), "wb") as f:
+                    cPickle.dump(X_tfidf_valid, f, -1)
+
+                ## svd
+                svd = TruncatedSVD(n_components=svd_n_components, n_iter=15)
+                X_svd_train = svd.fit_transform(X_tfidf_train)
+                X_svd_test = svd.transform(X_tfidf_valid)
+                with open("%s/train.%s_individual_svd%d.feat.pkl" % (path, feat_name, svd_n_components), "wb") as f:
+                    cPickle.dump(X_svd_train, f, -1)
+                with open("%s/valid.%s_individual_svd%d.feat.pkl" % (path, feat_name, svd_n_components), "wb") as f:
+                    cPickle.dump(X_svd_test, f, -1)
+
+    print("Done.")
+
+
+    #################
+    ## Re-training ##
+    #################
+    print("For training and testing...")
+    path = "%s/All" % config.feat_folder
+    for feat_name,column_name in zip(feat_names, column_names):
+        print "generate %s feat" % feat_name
+        tfv = getTFV(ngram_range=ngram_range)
+        X_tfidf_train = tfv.fit_transform(dfTrain[column_name])
+        X_tfidf_test = tfv.transform(dfTest[column_name])
+        with open("%s/train.%s.feat.pkl" % (path, feat_name), "wb") as f:
+            cPickle.dump(X_tfidf_train, f, -1)
+        with open("%s/test.%s.feat.pkl" % (path, feat_name), "wb") as f:
+            cPickle.dump(X_tfidf_test, f, -1)
+
+        ## svd
+        svd = TruncatedSVD(n_components=svd_n_components, n_iter=15)
+        X_svd_train = svd.fit_transform(X_tfidf_train)
+        X_svd_test = svd.transform(X_tfidf_test)
+        with open("%s/train.%s_individual_svd%d.feat.pkl" % (path, feat_name, svd_n_components), "wb") as f:
+            cPickle.dump(X_svd_train, f, -1)
+        with open("%s/test.%s_individual_svd%d.feat.pkl" % (path, feat_name, svd_n_components), "wb") as f:
+            cPickle.dump(X_svd_test, f, -1)
+
+    print("Done.")
+
+    ## save feat names
+    print("Feature names are stored in %s" % feat_name_file)
+    feat_names += [ "%s_individual_svd%d"%(f, svd_n_components) for f in feat_names ]
+    dump_feat_name(feat_names, feat_name_file)
+
+    print("All Done.")
