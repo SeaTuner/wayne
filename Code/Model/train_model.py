@@ -198,4 +198,85 @@ def hyperopt_obj(param, feat_folder, feat_name, trial_counter):
                 if param["task"] in ["regression", "ranking"]:
                     ## regression & pairwise ranking with xgboost
                     bst = xgb.train(param, dtrain_base, param['num_round'], watchlist, feval=evalerror_regrank_valid)
-             
+                    pred = bst.predict(dvalid_base)
+
+                elif param["task"] in ["softmax"]:
+                    ## softmax regression with xgboost
+                    bst = xgb.train(param, dtrain_base, param['num_round'], watchlist, feval=evalerror_softmax_valid)
+                    pred = bst.predict(dvalid_base)
+                    w = np.asarray(range(1,numOfClass+1))
+                    pred = pred * w[np.newaxis,:]
+                    pred = np.sum(pred, axis=1)
+
+                elif param["task"] in ["softkappa"]:
+                    ## softkappa with xgboost
+                    obj = lambda preds, dtrain: softkappaObj(preds, dtrain, hess_scale=param['hess_scale'])
+                    bst = xgb.train(param, dtrain_base, param['num_round'], watchlist, obj=obj, feval=evalerror_softkappa_valid)
+                    pred = softmax(bst.predict(dvalid_base))
+                    w = np.asarray(range(1,numOfClass+1))
+                    pred = pred * w[np.newaxis,:]
+                    pred = np.sum(pred, axis=1)
+
+                elif param["task"]  in ["ebc"]:
+                    ## ebc with xgboost
+                    obj = lambda preds, dtrain: ebcObj(preds, dtrain)
+                    bst = xgb.train(param, dtrain_base, param['num_round'], watchlist, obj=obj, feval=evalerror_ebc_valid)
+                    pred = sigmoid(bst.predict(dvalid_base))
+                    pred = applyEBCRule(pred, hard_threshold=ebc_hard_threshold)
+
+                elif param["task"]  in ["cocr"]:
+                    ## cocr with xgboost
+                    obj = lambda preds, dtrain: cocrObj(preds, dtrain)
+                    bst = xgb.train(param, dtrain_base, param['num_round'], watchlist, obj=obj, feval=evalerror_cocr_valid)
+                    pred = bst.predict(dvalid_base)
+                    pred = applyCOCRRule(pred)
+
+                elif param['task'] == "reg_skl_rf":
+                    ## regression with sklearn random forest regressor
+                    rf = RandomForestRegressor(n_estimators=param['n_estimators'],
+                                               max_features=param['max_features'],
+                                               n_jobs=param['n_jobs'],
+                                               random_state=param['random_state'])
+                    rf.fit(X_train[index_base], labels_train[index_base]+1, sample_weight=weight_train[index_base])
+                    pred = rf.predict(X_valid)
+
+                elif param['task'] == "reg_skl_etr":
+                    ## regression with sklearn extra trees regressor
+                    etr = ExtraTreesRegressor(n_estimators=param['n_estimators'],
+                                              max_features=param['max_features'],
+                                              n_jobs=param['n_jobs'],
+                                              random_state=param['random_state'])
+                    etr.fit(X_train[index_base], labels_train[index_base]+1, sample_weight=weight_train[index_base])
+                    pred = etr.predict(X_valid)
+
+                elif param['task'] == "reg_skl_gbm":
+                    ## regression with sklearn gradient boosting regressor
+                    gbm = GradientBoostingRegressor(n_estimators=param['n_estimators'],
+                                                    max_features=param['max_features'],
+                                                    learning_rate=param['learning_rate'],
+                                                    max_depth=param['max_depth'],
+                                                    subsample=param['subsample'],
+                                                    random_state=param['random_state'])
+                    gbm.fit(X_train.toarray()[index_base], labels_train[index_base]+1, sample_weight=weight_train[index_base])
+                    pred = gbm.predict(X_valid.toarray())
+
+                elif param['task'] == "clf_skl_lr":
+                    ## classification with sklearn logistic regression
+                    lr = LogisticRegression(penalty="l2", dual=True, tol=1e-5,
+                                            C=param['C'], fit_intercept=True, intercept_scaling=1.0,
+                                            class_weight='auto', random_state=param['random_state'])
+                    lr.fit(X_train[index_base], labels_train[index_base]+1)
+                    pred = lr.predict_proba(X_valid)
+                    w = np.asarray(range(1,numOfClass+1))
+                    pred = pred * w[np.newaxis,:]
+                    pred = np.sum(pred, axis=1)
+
+                elif param['task'] == "reg_skl_svr":
+                    ## regression with sklearn support vector regression
+                    X_train, X_valid = X_train.toarray(), X_valid.toarray()
+                    scaler = StandardScaler()
+                    X_train[index_base] = scaler.fit_transform(X_train[index_base])
+                    X_valid = scaler.transform(X_valid)
+                    svr = SVR(C=param['C'], gamma=param['gamma'], epsilon=param['epsilon'],
+                                            degree=param['degree'], kernel=param['kernel'])
+                    svr.fit(X_train
