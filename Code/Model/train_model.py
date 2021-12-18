@@ -386,4 +386,118 @@ def hyperopt_obj(param, feat_folder, feat_name, trial_counter):
                     np.savetxt(train_x_fn, X_train[index_base], fmt="%.6f", delimiter='\t')
                     np.savetxt(train_y_fn, labels_train[index_base], fmt="%d", delimiter='\t')
                     np.savetxt(valid_x_fn, X_valid, fmt="%.6f", delimiter='\t')
-                    # np.savetxt(valid_y_fn, labels_valid, fmt
+                    # np.savetxt(valid_y_fn, labels_valid, fmt="%d", delimiter='\t')
+
+
+                    pars = [
+                        "train_x_fn=",train_x_fn,"\n",
+                        "train_y_fn=",train_y_fn,"\n",
+                        #"train_w_fn=",weight_train_path,"\n",
+                        "model_fn_prefix=",model_fn_prefix,"\n",
+                        "reg_L2=", param['reg_L2'], "\n",
+                        #"reg_depth=", 1.01, "\n",
+                        "algorithm=","RGF","\n",
+                        "loss=","LS","\n",
+                        #"opt_interval=", 100, "\n",
+                        "valid_interval=", param['max_leaf_forest'],"\n",
+                        "max_leaf_forest=", param['max_leaf_forest'],"\n",
+                        "num_iteration_opt=", param['num_iteration_opt'], "\n",
+                        "num_tree_search=", param['num_tree_search'], "\n",
+                        "min_pop=", param['min_pop'], "\n",
+                        "opt_interval=", param['opt_interval'], "\n",
+                        "opt_stepsize=", param['opt_stepsize'], "\n",
+                        "NormalizeTarget"
+                    ]
+                    pars = "".join([str(p) for p in pars])
+
+                    rfg_setting_train = "./rfg_setting_train"
+                    with open(rfg_setting_train+".inp", "wb") as f:
+                        f.write(pars)
+
+                    ## train fm
+                    cmd = "perl %s %s train %s >> rgf.log" % (
+                            call_exe, rgf_exe, rfg_setting_train)
+                    #print cmd
+                    os.system(cmd)
+
+
+                    model_fn = model_fn_prefix + "-01" 
+                    pars = [
+                        "test_x_fn=",valid_x_fn,"\n",
+                        "model_fn=", model_fn,"\n",
+                        "prediction_fn=", valid_pred_fn
+                    ]
+
+                    pars = "".join([str(p) for p in pars])
+                    
+                    rfg_setting_valid = "./rfg_setting_valid"
+                    with open(rfg_setting_valid+".inp", "wb") as f:
+                        f.write(pars)
+                    cmd = "perl %s %s predict %s >> rgf.log" % (
+                            call_exe, rgf_exe, rfg_setting_valid)
+                    #print cmd
+                    os.system(cmd)
+
+                    pred = np.loadtxt(valid_pred_fn, dtype=float)
+
+                ## weighted averageing over different models
+                pred_valid = pred
+                ## this bagging iteration
+                preds_bagging[:,n] = pred_valid
+                pred_raw = np.mean(preds_bagging[:,:(n+1)], axis=1)
+                pred_rank = pred_raw.argsort().argsort()
+                pred_score, cutoff = getScore(pred_rank, cdf_valid, valid=True)
+                kappa_valid = quadratic_weighted_kappa(pred_score, Y_valid)
+                if (n+1) != bagging_size:
+                    print("              {:>3}   {:>3}   {:>3}   {:>6}   {} x {}".format(
+                                run, fold, n+1, np.round(kappa_valid,6), X_train.shape[0], X_train.shape[1]))
+                else:
+                    print("                    {:>3}       {:>3}      {:>3}    {:>8}  {} x {}".format(
+                                run, fold, n+1, np.round(kappa_valid,6), X_train.shape[0], X_train.shape[1]))
+            kappa_cv[run-1,fold-1] = kappa_valid
+            ## save this prediction
+            dfPred = pd.DataFrame({"target": Y_valid, "prediction": pred_raw})
+            dfPred.to_csv(raw_pred_valid_path, index=False, header=True,
+                         columns=["target", "prediction"])
+            ## save this prediction
+            dfPred = pd.DataFrame({"target": Y_valid, "prediction": pred_rank})
+            dfPred.to_csv(rank_pred_valid_path, index=False, header=True,
+                         columns=["target", "prediction"])
+
+    kappa_cv_mean = np.mean(kappa_cv)
+    kappa_cv_std = np.std(kappa_cv)
+    if verbose_level >= 1:
+        print("              Mean: %.6f" % kappa_cv_mean)
+        print("              Std: %.6f" % kappa_cv_std)
+
+
+    ####################
+    #### Retraining ####
+    ####################
+    #### all the path
+    path = "%s/All" % (feat_folder)
+    save_path = "%s/All" % output_path
+    subm_path = "%s/Subm" % output_path
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    if not os.path.exists(subm_path):
+        os.makedirs(subm_path)
+    # feat
+    feat_train_path = "%s/train.feat" % path
+    feat_test_path = "%s/test.feat" % path
+    # weight
+    weight_train_path = "%s/train.feat.weight" % path
+    # info
+    info_train_path = "%s/train.info" % path
+    info_test_path = "%s/test.info" % path
+    # cdf
+    cdf_test_path = "%s/test.cdf" % path
+    # raw prediction path (rank)
+    raw_pred_test_path = "%s/test.raw.pred.%s_[Id@%d].csv" % (save_path, feat_name, trial_counter)
+    rank_pred_test_path = "%s/test.pred.%s_[Id@%d].csv" % (save_path, feat_name, trial_counter)
+    # submission path (relevance as in [1,2,3,4])
+    subm_path = "%s/test.pred.%s_[Id@%d]_[Mean%.6f]_[Std%.6f].csv" % (subm_path, feat_name, trial_counter, kappa_cv_mean, kappa_cv_std)
+
+    #### load data
+    ## load feat
+    X_train, labels_train = load_svmlight_fi
