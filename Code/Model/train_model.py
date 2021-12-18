@@ -279,4 +279,111 @@ def hyperopt_obj(param, feat_folder, feat_name, trial_counter):
                     X_valid = scaler.transform(X_valid)
                     svr = SVR(C=param['C'], gamma=param['gamma'], epsilon=param['epsilon'],
                                             degree=param['degree'], kernel=param['kernel'])
-                    svr.fit(X_train
+                    svr.fit(X_train[index_base], labels_train[index_base]+1, sample_weight=weight_train[index_base])
+                    pred = svr.predict(X_valid)
+
+                elif param['task'] == "reg_skl_ridge":
+                    ## regression with sklearn ridge regression
+                    ridge = Ridge(alpha=param["alpha"], normalize=True)
+                    ridge.fit(X_train[index_base], labels_train[index_base]+1, sample_weight=weight_train[index_base])
+                    pred = ridge.predict(X_valid)
+
+                elif param['task'] == "reg_skl_lasso":
+                    ## regression with sklearn lasso
+                    lasso = Lasso(alpha=param["alpha"], normalize=True)
+                    lasso.fit(X_train[index_base], labels_train[index_base]+1)
+                    pred = lasso.predict(X_valid)
+
+                elif param['task'] == 'reg_libfm':
+                    ## regression with factorization machine (libfm)
+                    ## to array
+                    X_train = X_train.toarray()
+                    X_valid = X_valid.toarray()
+
+                    ## scale
+                    scaler = StandardScaler()
+                    X_train[index_base] = scaler.fit_transform(X_train[index_base])
+                    X_valid = scaler.transform(X_valid)
+
+                    ## dump feat
+                    dump_svmlight_file(X_train[index_base], labels_train[index_base], feat_train_path+".tmp")
+                    dump_svmlight_file(X_valid, labels_valid, feat_valid_path+".tmp")
+
+                    ## train fm
+                    cmd = "%s -task r -train %s -test %s -out %s -dim '1,1,%d' -iter %d > libfm.log" % ( \
+                                libfm_exe, feat_train_path+".tmp", feat_valid_path+".tmp", raw_pred_valid_path, \
+                                param['dim'], param['iter'])
+                    os.system(cmd)
+                    os.remove(feat_train_path+".tmp")
+                    os.remove(feat_valid_path+".tmp")
+                    
+                    ## extract libfm prediction
+                    pred = np.loadtxt(raw_pred_valid_path, dtype=float)
+                    ## labels are in [0,1,2,3]
+                    pred += 1
+
+                elif param['task'] == "reg_keras_dnn":
+                    ## regression with keras' deep neural networks
+                    model = Sequential()
+                    ## input layer
+                    model.add(Dropout(param["input_dropout"]))
+                    ## hidden layers
+                    first = True
+                    hidden_layers = param['hidden_layers']
+                    while hidden_layers > 0:
+                        if first:
+                            dim = X_train.shape[1]
+                            first = False
+                        else:
+                            dim = param["hidden_units"]
+                        model.add(Dense(dim, param["hidden_units"], init='glorot_uniform'))
+                        if param["batch_norm"]:
+                            model.add(BatchNormalization((param["hidden_units"],)))
+                        if param["hidden_activation"] == "prelu":
+                            model.add(PReLU((param["hidden_units"],)))
+                        else:
+                            model.add(Activation(param['hidden_activation']))
+                        model.add(Dropout(param["hidden_dropout"]))
+                        hidden_layers -= 1
+
+                    ## output layer
+                    model.add(Dense(param["hidden_units"], 1, init='glorot_uniform'))
+                    model.add(Activation('linear'))
+
+                    ## loss
+                    model.compile(loss='mean_squared_error', optimizer="adam")
+
+                    ## to array
+                    X_train = X_train.toarray()
+                    X_valid = X_valid.toarray()
+
+                    ## scale
+                    scaler = StandardScaler()
+                    X_train[index_base] = scaler.fit_transform(X_train[index_base])
+                    X_valid = scaler.transform(X_valid)
+
+                    ## train
+                    model.fit(X_train[index_base], labels_train[index_base]+1,
+                                nb_epoch=param['nb_epoch'], batch_size=param['batch_size'],
+                                validation_split=0, verbose=0)
+
+                    ##prediction
+                    pred = model.predict(X_valid, verbose=0)
+                    pred.shape = (X_valid.shape[0],)
+
+                elif param['task'] == "reg_rgf":
+                    ## regression with regularized greedy forest (rgf)
+                    ## to array
+                    X_train, X_valid = X_train.toarray(), X_valid.toarray()
+
+                    train_x_fn = feat_train_path+".x"
+                    train_y_fn = feat_train_path+".y"
+                    valid_x_fn = feat_valid_path+".x"
+                    valid_pred_fn = feat_valid_path+".pred"
+
+                    model_fn_prefix = "rgf_model"
+
+                    np.savetxt(train_x_fn, X_train[index_base], fmt="%.6f", delimiter='\t')
+                    np.savetxt(train_y_fn, labels_train[index_base], fmt="%d", delimiter='\t')
+                    np.savetxt(valid_x_fn, X_valid, fmt="%.6f", delimiter='\t')
+                    # np.savetxt(valid_y_fn, labels_valid, fmt
