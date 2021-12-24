@@ -500,4 +500,107 @@ def hyperopt_obj(param, feat_folder, feat_name, trial_counter):
 
     #### load data
     ## load feat
-    X_train, labels_train = load_svmlight_fi
+    X_train, labels_train = load_svmlight_file(feat_train_path)
+    X_test, labels_test = load_svmlight_file(feat_test_path)
+    if X_test.shape[1] < X_train.shape[1]:
+        X_test = hstack([X_test, np.zeros((X_test.shape[0], X_train.shape[1]-X_test.shape[1]))])
+    elif X_test.shape[1] > X_train.shape[1]:
+        X_train = hstack([X_train, np.zeros((X_train.shape[0], X_test.shape[1]-X_train.shape[1]))])
+    X_train = X_train.tocsr()
+    X_test = X_test.tocsr()
+    ## load train weight
+    weight_train = np.loadtxt(weight_train_path, dtype=float)
+    ## load test info
+    info_train = pd.read_csv(info_train_path)
+    numTrain = info_train.shape[0]
+    info_test = pd.read_csv(info_test_path)
+    numTest = info_test.shape[0]
+    id_test = info_test["id"]
+    
+    ## load cdf
+    cdf_test = np.loadtxt(cdf_test_path, dtype=float)  
+    ##
+    evalerror_regrank_test = lambda preds,dtrain: evalerror_regrank_cdf(preds, dtrain, cdf_test)
+    evalerror_softmax_test = lambda preds,dtrain: evalerror_softmax_cdf(preds, dtrain, cdf_test)
+    evalerror_softkappa_test = lambda preds,dtrain: evalerror_softkappa_cdf(preds, dtrain, cdf_test)
+    evalerror_ebc_test = lambda preds,dtrain: evalerror_ebc_cdf(preds, dtrain, cdf_test, ebc_hard_threshold)
+    evalerror_cocr_test = lambda preds,dtrain: evalerror_cocr_cdf(preds, dtrain, cdf_test)
+                    
+    ## bagging
+    preds_bagging = np.zeros((numTest, bagging_size), dtype=float)
+    for n in range(bagging_size):
+        if bootstrap_replacement:
+            sampleSize = int(numTrain*bootstrap_ratio)
+            #index_meta = rng.randint(numTrain, size=sampleSize)
+            #index_base = [i for i in range(numTrain) if i not in index_meta]
+            index_base = rng.randint(numTrain, size=sampleSize)
+            index_meta = [i for i in range(numTrain) if i not in index_base]
+        else:
+            randnum = rng.uniform(size=numTrain)
+            index_base = [i for i in range(numTrain) if randnum[i] < bootstrap_ratio]
+            index_meta = [i for i in range(numTrain) if randnum[i] >= bootstrap_ratio]
+ 
+        if param.has_key("booster"):
+            dtest = xgb.DMatrix(X_test, label=labels_test)
+            dtrain = xgb.DMatrix(X_train[index_base], label=labels_train[index_base], weight=weight_train[index_base])
+                
+            watchlist = []
+            if verbose_level >= 2:
+                watchlist  = [(dtrain, 'train')]
+                    
+        ## train
+        if param["task"] in ["regression", "ranking"]:
+            bst = xgb.train(param, dtrain, param['num_round'], watchlist, feval=evalerror_regrank_test)
+            pred = bst.predict(dtest)
+
+        elif param["task"] in ["softmax"]:
+            bst = xgb.train(param, dtrain, param['num_round'], watchlist, feval=evalerror_softmax_test)
+            pred = bst.predict(dtest)
+            w = np.asarray(range(1,numOfClass+1))
+            pred = pred * w[np.newaxis,:]
+            pred = np.sum(pred, axis=1)
+
+        elif param["task"] in ["softkappa"]:
+            obj = lambda preds, dtrain: softkappaObj(preds, dtrain, hess_scale=param['hess_scale'])
+            bst = xgb.train(param, dtrain, param['num_round'], watchlist, obj=obj, feval=evalerror_softkappa_test)
+            pred = softmax(bst.predict(dtest))
+            w = np.asarray(range(1,numOfClass+1))
+            pred = pred * w[np.newaxis,:]
+            pred = np.sum(pred, axis=1)
+
+        elif param["task"]  in ["ebc"]:
+            obj = lambda preds, dtrain: ebcObj(preds, dtrain)
+            bst = xgb.train(param, dtrain, param['num_round'], watchlist, obj=obj, feval=evalerror_ebc_test)
+            pred = sigmoid(bst.predict(dtest))
+            pred = applyEBCRule(pred, hard_threshold=ebc_hard_threshold)
+
+        elif param["task"]  in ["cocr"]:
+            obj = lambda preds, dtrain: cocrObj(preds, dtrain)
+            bst = xgb.train(param, dtrain, param['num_round'], watchlist, obj=obj, feval=evalerror_cocr_test)
+            pred = bst.predict(dtest)
+            pred = applyCOCRRule(pred)
+
+        elif param['task'] == "reg_skl_rf":
+            ## random forest regressor
+            rf = RandomForestRegressor(n_estimators=param['n_estimators'],
+                                       max_features=param['max_features'],
+                                       n_jobs=param['n_jobs'],
+                                       random_state=param['random_state'])
+            rf.fit(X_train[index_base], labels_train[index_base]+1, sample_weight=weight_train[index_base])
+            pred = rf.predict(X_test)
+
+        elif param['task'] == "reg_skl_etr":
+            ## extra trees regressor
+            etr = ExtraTreesRegressor(n_estimators=param['n_estimators'],
+                                      max_features=param['max_features'],
+                                      n_jobs=param['n_jobs'],
+                                      random_state=param['random_state'])
+            etr.fit(X_train[index_base], labels_train[index_base]+1, sample_weight=weight_train[index_base])
+            pred = etr.predict(X_test)
+
+        elif param['task'] == "reg_skl_gbm":
+            ## gradient boosting regressor
+            gbm = GradientBoostingRegressor(n_estimators=param['n_estimators'],
+                                            max_features=param['max_features'],
+                                            learning_rate=param['learning_rate'],
+ 
