@@ -723,4 +723,142 @@ def hyperopt_obj(param, feat_folder, feat_name, trial_counter):
             test_x_fn = feat_test_path+".x"
             test_pred_fn = feat_test_path+".pred"
 
-            mo
+            model_fn_prefix = "rgf_model"
+
+            np.savetxt(train_x_fn, X_train[index_base], fmt="%.6f", delimiter='\t')
+            np.savetxt(train_y_fn, labels_train[index_base], fmt="%d", delimiter='\t')
+            np.savetxt(test_x_fn, X_test, fmt="%.6f", delimiter='\t')
+            # np.savetxt(valid_y_fn, labels_valid, fmt="%d", delimiter='\t')
+
+
+            pars = [
+                "train_x_fn=",train_x_fn,"\n",
+                "train_y_fn=",train_y_fn,"\n",
+                #"train_w_fn=",weight_train_path,"\n",
+                "model_fn_prefix=",model_fn_prefix,"\n",
+                "reg_L2=", param['reg_L2'], "\n",
+                #"reg_depth=", 1.01, "\n",
+                "algorithm=","RGF","\n",
+                "loss=","LS","\n",
+                "test_interval=", param['max_leaf_forest'],"\n",
+                "max_leaf_forest=", param['max_leaf_forest'],"\n",
+                "num_iteration_opt=", param['num_iteration_opt'], "\n",
+                "num_tree_search=", param['num_tree_search'], "\n",
+                "min_pop=", param['min_pop'], "\n",
+                "opt_interval=", param['opt_interval'], "\n",
+                "opt_stepsize=", param['opt_stepsize'], "\n",
+                "NormalizeTarget"
+            ]
+            pars = "".join([str(p) for p in pars])
+
+            rfg_setting_train = "./rfg_setting_train"
+            with open(rfg_setting_train+".inp", "wb") as f:
+                f.write(pars)
+
+            ## train fm
+            cmd = "perl %s %s train %s >> rgf.log" % (
+                    call_exe, rgf_exe, rfg_setting_train)
+            #print cmd
+            os.system(cmd)
+
+
+            model_fn = model_fn_prefix + "-01" 
+            pars = [
+                "test_x_fn=",test_x_fn,"\n",
+                "model_fn=", model_fn,"\n",
+                "prediction_fn=", test_pred_fn
+            ]
+
+            pars = "".join([str(p) for p in pars])
+            
+            rfg_setting_test = "./rfg_setting_test"
+            with open(rfg_setting_test+".inp", "wb") as f:
+                f.write(pars)
+            cmd = "perl %s %s predict %s >> rgf.log" % (
+                    call_exe, rgf_exe, rfg_setting_test)
+            #print cmd
+            os.system(cmd)
+
+            pred = np.loadtxt(test_pred_fn, dtype=float)
+
+        ## weighted averageing over different models
+        pred_test = pred
+        preds_bagging[:,n] = pred_test
+    pred_raw = np.mean(preds_bagging, axis=1)
+    pred_rank = pred_raw.argsort().argsort()
+    #
+    ## write
+    output = pd.DataFrame({"id": id_test, "prediction": pred_raw})    
+    output.to_csv(raw_pred_test_path, index=False)
+
+    ## write
+    output = pd.DataFrame({"id": id_test, "prediction": pred_rank})    
+    output.to_csv(rank_pred_test_path, index=False)
+
+    ## write score
+    pred_score = getScore(pred, cdf_test)
+    output = pd.DataFrame({"id": id_test, "prediction": pred_score})    
+    output.to_csv(subm_path, index=False)
+    #"""
+        
+    return kappa_cv_mean, kappa_cv_std
+
+
+
+    
+####################
+## Model Buliding ##
+####################
+
+def check_model(models, feat_name):
+    if models == "all":
+        return True
+    for model in models:
+        if model in feat_name:
+            return True
+    return False
+
+if __name__ == "__main__":
+    specified_models = sys.argv[1:]
+    if len(specified_models) == 0:
+        print("You have to specify which model to train.\n")
+        print("Usage: python ./train_model_library_lsa.py model1 model2 model3 ...\n")
+        print("Example: python ./train_model_library_lsa.py reg_skl_ridge reg_skl_lasso reg_skl_svr\n")
+        print("See model_library_config_lsa.py for a list of available models (i.e., Model@model_name)")
+        sys.exit()
+    log_path = "%s/Log" % output_path
+    if not os.path.exists(log_path):
+        os.makedirs(log_path)
+    for feat_name, feat_folder in zip(feat_names, feat_folders):
+        if not check_model(specified_models, feat_name):
+            continue
+        param_space = param_spaces[feat_name]
+        #"""
+
+        log_file = "%s/%s_hyperopt.log" % (log_path, feat_name)
+        log_handler = open( log_file, 'wb' )
+        writer = csv.writer( log_handler )
+        headers = [ 'trial_counter', 'kappa_mean', 'kappa_std' ]
+        for k,v in sorted(param_space.items()):
+            headers.append(k)
+        writer.writerow( headers )
+        log_handler.flush()
+        
+        print("************************************************************")
+        print("Search for the best params")
+        #global trial_counter
+        trial_counter = 0
+        trials = Trials()
+        objective = lambda p: hyperopt_wrapper(p, feat_folder, feat_name)
+        best_params = fmin(objective, param_space, algo=tpe.suggest,
+                           trials=trials, max_evals=param_space["max_evals"])
+        for f in int_feat:
+            if best_params.has_key(f):
+                best_params[f] = int(best_params[f])
+        print("************************************************************")
+        print("Best params")
+        for k,v in best_params.items():
+            print "        %s: %s" % (k,v)
+        trial_kappas = -np.asarray(trials.losses(), dtype=float)
+        best_kappa_mean = max(trial_kappas)
+        ind = np.where(trial_k
