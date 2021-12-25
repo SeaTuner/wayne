@@ -603,4 +603,124 @@ def hyperopt_obj(param, feat_folder, feat_name, trial_counter):
             gbm = GradientBoostingRegressor(n_estimators=param['n_estimators'],
                                             max_features=param['max_features'],
                                             learning_rate=param['learning_rate'],
- 
+                                            max_depth=param['max_depth'],
+                                            subsample=param['subsample'],
+                                            random_state=param['random_state'])
+            gbm.fit(X_train.toarray()[index_base], labels_train[index_base]+1, sample_weight=weight_train[index_base])
+            pred = gbm.predict(X_test.toarray())
+
+        elif param['task'] == "clf_skl_lr":
+            lr = LogisticRegression(penalty="l2", dual=True, tol=1e-5,
+                                    C=param['C'], fit_intercept=True, intercept_scaling=1.0,
+                                    class_weight='auto', random_state=param['random_state'])
+            lr.fit(X_train[index_base], labels_train[index_base]+1)
+            pred = lr.predict_proba(X_test)
+            w = np.asarray(range(1,numOfClass+1))
+            pred = pred * w[np.newaxis,:]
+            pred = np.sum(pred, axis=1)
+
+        elif param['task'] == "reg_skl_svr":
+            ## regression with sklearn support vector regression
+            X_train, X_test = X_train.toarray(), X_test.toarray()
+            scaler = StandardScaler()
+            X_train[index_base] = scaler.fit_transform(X_train[index_base])
+            X_test = scaler.transform(X_test)
+            svr = SVR(C=param['C'], gamma=param['gamma'], epsilon=param['epsilon'],
+                                    degree=param['degree'], kernel=param['kernel'])
+            svr.fit(X_train[index_base], labels_train[index_base]+1, sample_weight=weight_train[index_base])
+            pred = svr.predict(X_test)
+
+        elif param['task'] == "reg_skl_ridge":
+            ridge = Ridge(alpha=param["alpha"], normalize=True)
+            ridge.fit(X_train[index_base], labels_train[index_base]+1, sample_weight=weight_train[index_base])
+            pred = ridge.predict(X_test)
+
+        elif param['task'] == "reg_skl_lasso":
+            lasso = Lasso(alpha=param["alpha"], normalize=True)
+            lasso.fit(X_train[index_base], labels_train[index_base]+1)
+            pred = lasso.predict(X_test)
+
+        elif param['task'] == 'reg_libfm':
+            ## to array
+            X_train, X_test = X_train.toarray(), X_test.toarray()
+
+            ## scale
+            scaler = StandardScaler()
+            X_train[index_base] = scaler.fit_transform(X_train[index_base])
+            X_test = scaler.transform(X_test)
+
+            ## dump feat
+            dump_svmlight_file(X_train[index_base], labels_train[index_base], feat_train_path+".tmp")
+            dump_svmlight_file(X_test, labels_test, feat_test_path+".tmp")
+
+            ## train fm
+            cmd = "%s -task r -train %s -test %s -out %s -dim '1,1,%d' -iter %d > libfm.log" % ( \
+                        libfm_exe, feat_train_path+".tmp", feat_test_path+".tmp", raw_pred_test_path, \
+                        param['dim'], param['iter'])
+            os.system(cmd)
+            os.remove(feat_train_path+".tmp")
+            os.remove(feat_test_path+".tmp")
+            
+            ## extract libfm prediction
+            pred = np.loadtxt(raw_pred_test_path, dtype=float)
+            ## labels are in [0,1,2,3]
+            pred += 1
+
+        elif param['task'] == "reg_keras_dnn":
+            ## regression with keras deep neural networks
+            model = Sequential()
+            ## input layer
+            model.add(Dropout(param["input_dropout"]))
+            ## hidden layers
+            first = True
+            hidden_layers = param['hidden_layers']
+            while hidden_layers > 0:
+                if first:
+                    dim = X_train.shape[1]
+                    first = False
+                else:
+                    dim = param["hidden_units"]
+                model.add(Dense(dim, param["hidden_units"], init='glorot_uniform'))
+                if param["batch_norm"]:
+                    model.add(BatchNormalization((param["hidden_units"],)))
+                if param["hidden_activation"] == "prelu":
+                    model.add(PReLU((param["hidden_units"],)))
+                else:
+                    model.add(Activation(param['hidden_activation']))
+                model.add(Dropout(param["hidden_dropout"]))
+                hidden_layers -= 1
+
+            ## output layer
+            model.add(Dense(param["hidden_units"], 1, init='glorot_uniform'))
+            model.add(Activation('linear'))
+
+            ## loss
+            model.compile(loss='mean_squared_error', optimizer="adam")
+
+            ## to array
+            X_train = X_train.toarray()
+            X_test = X_test.toarray()
+
+            ## scale
+            scaler = StandardScaler()
+            X_train[index_base] = scaler.fit_transform(X_train[index_base])
+            X_test = scaler.transform(X_test)
+
+            ## train
+            model.fit(X_train[index_base], labels_train[index_base]+1,
+                        nb_epoch=param['nb_epoch'], batch_size=param['batch_size'], verbose=0)
+
+            ##prediction
+            pred = model.predict(X_test, verbose=0)
+            pred.shape = (X_test.shape[0],)
+
+        elif param['task'] == "reg_rgf":
+            ## to array
+            X_train, X_test = X_train.toarray(), X_test.toarray()
+
+            train_x_fn = feat_train_path+".x"
+            train_y_fn = feat_train_path+".y"
+            test_x_fn = feat_test_path+".x"
+            test_pred_fn = feat_test_path+".pred"
+
+            mo
