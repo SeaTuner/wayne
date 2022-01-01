@@ -1,0 +1,20 @@
+\begin{thebibliography}{10}
+
+\bibitem{owen}
+\url{http://nycdatascience.com/featured-talk-1-kaggle-data-scientist-owen-zhang/}.
+
+\bibitem{Otto_1st}
+\url{https://www.kaggle.com/c/otto-group-product-classification-challenge/forums/t/14335/1st-place-winner-solution-gilberto-titericz-stanislav-semenov}.
+
+\bibitem{malware_2nd}
+\url{https://www.kaggle.com/c/malware-classification/forums/t/13863/2nd-place-code-and-documentation
+  }.
+
+\bibitem{hyperopt_url}
+\url{http://hyperopt.github.io/hyperopt/}.
+
+\bibitem{hyperopt}
+James Bergstra, R$\acute{\text{e}}$mi Bardenet, Yoshua Bengio, and
+  Bal$\acute{\text{a}}$zs K$\acute{\text{e}}$gl.
+\newblock Algorithms for hyper-parameter optimization.
+\newblock In {\em Advances in 

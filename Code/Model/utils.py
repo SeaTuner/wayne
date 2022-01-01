@@ -324,4 +324,73 @@ def applyCOCRRule(preds):
 
 
 #############################################
-## Cutomized Evaluation Me
+## Cutomized Evaluation Metric for XGBoost ##
+#############################################
+#### evalerror for regression and pairwise ranking
+def evalerror_regrank_cdf(preds, dtrain, cdf):
+    ## label are in [0,1,2,3]
+    labels = dtrain.get_label() + 1
+    preds = getScore(preds, cdf)
+    kappa = quadratic_weighted_kappa(labels, preds)
+    ## we return -kappa for using early stopping
+    kappa *= -1.
+    return 'kappa', float(kappa)
+
+#### evalerror for softmax
+def evalerror_softmax_cdf(preds, dtrain, cdf):
+    ## label are in [0,1,2,3]
+    labels = dtrain.get_label() + 1
+    preds = getClfScore(preds, cdf)
+    kappa = quadratic_weighted_kappa(labels, preds)
+    ## we return -kappa for using early stopping
+    kappa *= -1.
+    return 'kappa', float(kappa)
+
+#### evalerror for soft-kappa
+def evalerror_softkappa_cdf(preds, dtrain, cdf):
+    ## label are in [0,1,2,3]
+    labels = dtrain.get_label() + 1
+    preds = softmax(preds)
+    preds = getClfScore(preds, cdf)
+    kappa = quadratic_weighted_kappa(labels, preds)
+    ## we return -kappa for using early stopping
+    kappa *= -1.
+    return 'kappa', float(kappa)
+
+#### evalerror for EBC
+def evalerror_ebc_cdf(preds, dtrain, cdf, hard_threshold=False):
+    labels = dtrain.get_label()
+    ## extended samples within the feature construction part
+    if np.min(labels) == -1 and np.max(labels) == 1:
+        labels = applyEBCRule(labels)
+    ## extended samples within the objective value computation part
+    ## See ebcobj function for detail
+    else:
+        ## label are in [0,1,2,3]
+        labels += 1
+    #print preds.shape
+    ## get prediction
+    #hard = False
+    if hard_threshold:
+        preds = applyEBCRule(preds, hard_threshold=hard_threshold)
+    else:
+        preds = sigmoid(preds)
+        preds = applyEBCRule(preds, hard_threshold=hard_threshold)
+        preds = getScore(preds, cdf)
+    kappa = quadratic_weighted_kappa(labels, preds)
+    ## we return -kappa for using early stopping
+    kappa *= -1.
+    return 'kappa', float(kappa)
+
+#### evalerror for COCR
+def evalerror_cocr_cdf(preds, dtrain, cdf):
+    labels = dtrain.get_label() + 1
+    #print preds.shape
+    ## get prediction
+    #preds = sigmoid(preds)
+    preds = applyCOCRRule(preds)
+    preds = getScore(preds, cdf)
+    kappa = quadratic_weighted_kappa(labels, preds)
+    ## we return -kappa for using early stopping
+    kappa *= -1.
+    return 'kappa', float(kappa)
