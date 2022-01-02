@@ -1,0 +1,62 @@
+%\documentclass[10pt,twocolumn,twoside]{IEEEtran}
+%\documentclass[draftclsnofoot,onecolumn,12pt]{IEEEtran}
+%\documentclass[draftclsnofoot,onecolumn,11pt,peerreview]{IEEEtran}
+\documentclass[12pt]{article}
+\usepackage{fullpage}
+\usepackage{pgfplots}
+\usepackage{subfigure}
+\usepackage{tikz}
+
+\usepackage{makeidx}
+
+\usepackage[cmex10]{amsmath}
+\usepackage{amsthm,amssymb,mathrsfs}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{cite}
+%\usepackage{apacite}
+%\usepackage{natbib}
+\usepackage{lineno}
+\usepackage{verbatim}
+\usepackage{bm}
+\usepackage{multirow}
+\usepackage{booktabs}
+\usepackage{amsthm}
+\usepackage{array}
+%\usepackage[usenames,dvipsnames]{color}
+\usepackage{color,xcolor}
+\usepackage{framed}
+\usepackage{hyperref}
+\definecolor{shadecolor}{gray}{0.9}
+\newcommand*{\vertbar}{\rule[-0.75ex]{0.25pt}{2.5ex}}
+\newcommand*{\horzbar}{\rule[.5ex]{2.5ex}{0.25pt}}
+
+\begin{document}
+\title{Solution for the Search Results Relevance Challenge}
+\author{Chenglong~Chen}
+\maketitle
+
+\abstract{In the Search Results Relevance Challenge, we were asked to build a model to predict the relevance score of search results, given the searching queries, resulting product titles and product descriptions. This document describes our team's solution, which relies heavily on feature engineering and model ensembling.}
+
+\section*{Personal details}
+\begin{itemize}
+\item Name: Chenglong Chen
+\item Location: Guangzhou, Guangdong, China
+\item Email: \url{c.chenglong@gmail.com}
+\item Competition: Search Results Relevance\footnote{\url{https://www.kaggle.com/c/crowdflower-search-relevance}}
+\end{itemize}
+
+\newpage
+\tableofcontents
+
+\newpage
+\section{Summary}
+Our solution consisted of two parts: feature engineering and model ensembling. We had developed mainly three types of feature:
+\begin{itemize}
+\item counting features
+\item distance features
+\item TF-IDF features
+\end{itemize}
+Before generating features, we have found that it's helpful to process the text of the data with spelling correction, synonym replacement, and stemming. Model ensembling consisted of two main steps, Firstly, we trained model library using different models, different parameter settings, and different subsets of the features. Secondly, we generated ensemble submission from the model library predictions using bagged ensemble selection. Performance was estimated using cross validation within the training set. No external data sources were used in our winning submission. The flowchart of our method is shown in Figure \ref{fig:Flowchart}.
+
+The best single model we have obtained during the competition was an XGBoost model with linear booster of Public LB score \textbf{0.69322} and Private LB score \textbf{0.70768}. Our final winning submission was a median ensemble of 35 best Public LB submissions. This submission scored \textbf{0.70807} on Public LB (our second best Public LB score) and \textbf{0.72189} on Private LB. \footnote{The best Public LB score was \textbf{0.70849} with corresponding Private LB score \textbf{0.72134}. It's a mean ensemble vers
