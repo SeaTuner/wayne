@@ -59,4 +59,120 @@ Our solution consisted of two parts: feature engineering and model ensembling. W
 \end{itemize}
 Before generating features, we have found that it's helpful to process the text of the data with spelling correction, synonym replacement, and stemming. Model ensembling consisted of two main steps, Firstly, we trained model library using different models, different parameter settings, and different subsets of the features. Secondly, we generated ensemble submission from the model library predictions using bagged ensemble selection. Performance was estimated using cross validation within the training set. No external data sources were used in our winning submission. The flowchart of our method is shown in Figure \ref{fig:Flowchart}.
 
-The best single model we have obtained during the competition was an XGBoost model with linear booster of Public LB score \textbf{0.69322} and Private LB score \textbf{0.70768}. Our final winning submission was a median ensemble of 35 best Public LB submissions. This submission scored \textbf{0.70807} on Public LB (our second best Public LB score) and \textbf{0.72189} on Private LB. \footnote{The best Public LB score was \textbf{0.70849} with corresponding Private LB score \textbf{0.72134}. It's a mean ensemble vers
+The best single model we have obtained during the competition was an XGBoost model with linear booster of Public LB score \textbf{0.69322} and Private LB score \textbf{0.70768}. Our final winning submission was a median ensemble of 35 best Public LB submissions. This submission scored \textbf{0.70807} on Public LB (our second best Public LB score) and \textbf{0.72189} on Private LB. \footnote{The best Public LB score was \textbf{0.70849} with corresponding Private LB score \textbf{0.72134}. It's a mean ensemble version of those 35 LB submissions.}
+
+\begin{comment}
+\begin{figure}[!htb]
+\centering
+\begin{tikzpicture}
+\draw (-1.5,0) -- (1.5,0);
+\draw (0,-1.5) -- (0,1.5);
+\end{tikzpicture}
+\end{figure}
+\end{comment}
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{./FlowChart.pdf}
+\caption{The flowchart of our method.}
+\label{fig:Flowchart}
+\end{figure}
+
+\section{Preprocessing}
+A few steps were performed to cleaning up the text.
+\subsection{Dropping HTML tags}
+There are some noisy HTML tags in \texttt{product\_description} field, we used the library \texttt{bs4} to clean them up. It didn't bring much gain, but we have kept it anyway.
+
+\subsection{Word Replacement}
+We have created features similar as ``how many words of query are in product title'', so it's important to perform some word replacements/alignments, e.g., spelling correction and synonym replacement, to align those words with the same or similar meaning. By exploring the provided data, it seems CrowdFlower has already applied some word replacements in the searching results.
+
+\subsubsection{Spelling Correction}
+The misspellings we have identified are listed in Table \ref{tab:spelling_correction}. Note that this is by no means an exhaustive list of all the misspellings in the provided data. It is just the misspellings we have found while exploring the training data during the competition. This also applies to Table \ref{tab:synonym} and Table \ref{tab:Other}.
+\begin{table}[!htb]
+\centering
+\caption{Spelling Correction}
+\label{tab:spelling_correction}
+\begin{tabular}{|c|c|}
+\hline
+\textcolor{red}{misspellings} & \textcolor{blue}{correction} \\
+\hline\hline
+\textcolor{red}{refrigirator} & \textcolor{blue}{refrigerator} \\
+\textcolor{red}{rechargable} batteries & \textcolor{blue}{rechargeable} batteries \\
+adidas \textcolor{red}{fragance} & adidas \textcolor{blue}{fragrance}\\
+\textcolor{red}{assassinss} creed & \textcolor{blue}{assassins} creed\\
+\textcolor{red}{rachel} ray cookware & \textcolor{blue}{rachael} ray cookware \\
+donut \textcolor{red}{shoppe} k cups & donut \textcolor{blue}{shop} k cups \\
+\textcolor{red}{extenal} hardisk 500 gb & \textcolor{blue}{external} hardisk 500 gb \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsubsection{Synonym Replacement}
+Table \ref{tab:synonym} lists out the synonyms we have found within the training data.
+\begin{table}[!htb]
+\centering
+\caption{Synonym Replacement}
+\label{tab:synonym}
+\begin{tabular}{|c|c|}
+\hline
+synonyms & replacement\\
+\hline\hline
+child, kid & kid\\
+bicycle, bike & bike\\
+refrigerator, fridge, freezer & fridge\\
+fragrance, perfume, cologne, eau de toilette & perfume\\
+\hline
+\end{tabular}
+\end{table}
+
+
+\subsubsection{Other Replacements}
+Apart from the above two types of replacement, we also replace those words listed in Table \ref{tab:Other} to align them. \footnote{For a complete list of all the replacements, please refer to file \texttt{./Data/synonyms.csv} and variable \texttt{replace\_dict} in file \texttt{./Code/Feat/nlp\_utils.py}}
+\begin{table}[!htb]
+\centering
+\caption{Other Replacement}
+\label{tab:Other}
+\begin{tabular}{|c|c|}
+\hline
+original & replacement\\
+\hline\hline
+nutri system & nutrisystem\\
+soda stream & sodastream\\
+playstation & ps\\
+ps 2 & ps2\\
+ps 3 & ps3\\
+ps 4 & ps4\\
+coffeemaker & coffee maker\\
+k-cup & k cup\\
+4-ounce & 4 ounce\\
+8-ounce & 8 ounce\\
+12-ounce & 12 ounce\\
+ounce & oz\\
+hardisk & hard drive\\
+hard disk & hard drive\\
+harley-davidson & harley davidson\\
+harleydavidson & harley davidson\\
+doctor who & dr who\\
+levi strauss & levis\\
+mac book & macbook\\
+micro-usb & micro usb\\
+video games & videogames\\
+game pad & gamepad\\
+western digital & wd\\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Stemming}
+We also performed stemming before generating features (e.g., counting features and BOW/TF-DF features) with Porter stemmer or Snowball stemmer from NLTK package (i.e., \texttt{nltk.stem.PorterStemmer()} and \texttt{nltk.stem.SnowballStemmer()}).
+
+\section{Feature Extraction/Selection}
+Before proceeding to describe the features, we first introduce some notations. We use tuple $(q_i, t_i, d_i)$ to denote the $i$-th sample in \texttt{train.csv} or \texttt{test.csv}, where $q_i$ is the \texttt{query}, $t_i$ is the \texttt{product\_title}, and $d_i$ is the \texttt{product\_description}. For \texttt{train.csv}, we further use $r_i$ and $v_i$ to denote \texttt{median\_relevance} and \texttt{relevance\_variance}\footnote{This is actually the standard deviation (std).}, respectively. We use function $\text{ngram}(s, n)$ to extract string/sentence $s$'s $n$-gram (splitted by whitespace), where $n\in\{1,2,3\}$ if not specified. For example
+\[
+\text{ngram}(\text{bridal shower decorations}, 2) = [\text{bridal shower}, \text{shower decorations}]\footnote{Note that this is a list (e.g., \texttt{list} in Python), not a set (e.g., \texttt{set} in Python).}
+\]
+
+\textbf{All the features are extracted for each run (i.e., repeated time) and fold (used in cross-validation and ensembling), and for the entire training and testing set (used in final model building and generating submission).}
+
+In the following, we will give a description of the features we have developed during the competition, which can be roughly divided into four types.
+\subsection{Counting Features}
+\label{subsec:
