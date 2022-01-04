@@ -274,4 +274,79 @@ The file to generate such features is provided as \textbf{genFeat\_basic\_tfidf\
 \begin{itemize}
 \item \textbf{TF-IDF Features}\\
 We extracted TF-IDF features from $\{q_i, t_i, d_i\}$, respectively. We considered unigram \& bigram \& trigram (in Sklearn's \texttt{TfidfVectorizer}, set \texttt{ngram\_range}=(1,3).)
-\
+\begin{itemize}
+\item \textbf{Common Vocabulary}\\
+Note that to ensure the TF-IDF feature vectors of $\{q_i, t_i, d_i\}$ are projected into the same vector space, we first concatenated $\{q_i, t_i, d_i\}$, and then fit a TF-IDF transformer to obtain the common vocabulary. We then used this common vocabulary to generate TF-IDF features for $\{q_i, t_i, d_i\}$, respectively.
+\item \textbf{Individual Vocabulary}\\
+We fit TF-IDF transformer for $\{q_i, t_i, d_i\}$, separately, with individual vocabulary.
+\end{itemize}
+\item \textbf{Basic Cosine Similarity}\\
+With previous generated TF-IDF features (using common vocabulary), we computed the cosine similarity of
+\begin{itemize}
+\item $q_i$ and $t_i$
+\item $q_i$ and $d_i$
+\item $t_i$ and $d_i$
+\end{itemize}
+\item \textbf{Statistical Cosine Similarity}\\
+Since cosine similarity is a distance metric, we also computed statistical cosine similarity as in Sec. \ref{subsubsec:Statistical_Distance_Features}.
+\item \textbf{SVD Reduced Features}\\
+We performed SVD to the above TF-IDF features to obtain a dimension reduced feature vector. Such reduced version was mostly used together with non-linear models, e.g., random forest and gradient boosting machine.
+\begin{itemize}
+\item \textbf{Common SVD}\\
+We first concatenated the TF-IDF vectors of $\{q_i, t_i, d_i\}$ (using common vocabulary), and fit a SVD transformer.
+\item \textbf{Individual SVD}\\
+We fit a SVD transformer for TF-IDF vectors of $\{q_i, t_i, d_i\}$, separately.
+\end{itemize}
+\item \textbf{Basic Cosine Similarity Based on SVD Reduced Features}\\
+We computed cosine similarity based on SVD reduced features (using common SVD).
+\item \textbf{Statistical Cosine Similarity Based on SVD Reduced Features}\\
+We computed statistical cosine similarity based on SVD reduced features as in Sec. \ref{subsubsec:Statistical_Distance_Features}.
+\end{itemize}
+\subsubsection{Cooccurrence TF-IDF Features}
+\label{subsubsec:Cooccurrence_TFIDF_Features}
+We extracted TF-IDF for cooccurrence terms between
+\begin{itemize}
+\item \texttt{query} unigram/bigram and \texttt{product\_title} unigram/bigram
+\item \texttt{query} unigram/bigram and \texttt{product\_description} unigram/bigram
+\item \texttt{query} id (\texttt{qid}) and \texttt{product\_title} unigram/bigram
+\item \texttt{query} id (\texttt{qid}) and \texttt{product\_description} unigram/bigram
+\end{itemize}
+
+We give an example to explain what's cooccurrence terms. Consider sample with \texttt{id} = 54 in \texttt{train.csv} (see Table \ref{tab:sample_id54}). For this sample, we have (after converting to lowercase)
+\begin{table}[!htb]
+\centering
+\caption{One sample in \texttt{train.csv}}
+\label{tab:sample_id54}
+\begin{tabular}{|c|c|c|}
+\hline
+\texttt{id} & \texttt{query} & \texttt{product\_title} \\
+\hline
+54 & silver necklace & fremada sterling silver freeform necklace\\
+\hline
+\end{tabular}
+\end{table}
+\begin{itemize}
+\item cooccurrence terms for \texttt{query} unigram and \texttt{product\_title} unigram is\\
+$[$silver fremada, silver sterling, silver silver, silver freeform, silver necklace, necklace fremada, necklace sterling, necklace silver, necklace freeform, necklace necklace$]$
+\item cooccurrence terms for \texttt{query} bigram and \texttt{product\_title} unigram is\\
+$[$silver necklace fremada, silver necklace sterling, silver necklace silver, silver necklace freeform, silver necklace necklace$]$
+\end{itemize}
+We have found that such features are very useful for linear model (e.g., XGBoost with linear booster). We suspect it is because these features add nonlinearity to the model. We also performed SVD to such features though we haven't found much gain using the corresponding SVD features.
+
+The file to generate such features is provided as \textbf{genFeat\_cooccurrence\_tfidf\_feat.py}.
+
+
+\subsection{Other Features}
+\subsubsection{Query Id}
+one-hot encoding of the \texttt{query} (generated via \texttt{genFeat\_id\_feat.py})
+
+\subsection{Feature Selection}
+For feature selection, we adopted the idea of ``untuned modeling'' as used in Marios Michailidis and Gert Jacobusse's 2nd place solution \cite{malware_2nd} to Microsoft Malware Classification Challenge on Kaggle. The same model is always used to perform cross validation on a (combined) set of features to test whether it improves the
+score compared to earlier feature sets. For features of high dimension (denoted as ``High''), e.g., feature set including raw TF-IDF features, we used XGBoost with linear booster (MSE objective); otherwise, we used \texttt{ExtraTreesRegressor} in Sklearn for features of low dimension (denoted as ``Low'').
+
+Note that with ensemble selection, one can train model library with various feature set and rely on ensemble selection to pick out the best ensemble within the model library. However, feature selection is still helpful. Using the above feature selection method, one can first identified some (possible) well performed feature set, and then trained model library with it. This helps to reduce the computation burden to some extent.
+
+\section{Modeling Techniques and Training}
+\subsection{Cross Validation Methodology}
+\subsubsection{The Split}
+Early in the competition, we have been using \texttt{StratifiedKFold} on \texttt{median\_relevance} or \texttt{query} with $k = 5$ or $k = 10$, but there was a large gap between our CV score a
