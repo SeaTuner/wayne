@@ -175,4 +175,103 @@ Before proceeding to describe the features, we first introduce some notations. W
 
 In the following, we will give a description of the features we have developed during the competition, which can be roughly divided into four types.
 \subsection{Counting Features}
-\label{subsec:
+\label{subsec:Counting_Features}
+We generated counting features for $\{q_i, t_i, d_i\}$. For some of the counting features, we also computed the ratio following the suggestion from Owen Zhang \cite{owen}.
+
+The file to generate such features is provided as \textbf{genFeat\_counting\_feat.py}.
+\subsubsection{Basic Counting Features}
+\begin{itemize}
+\item \textbf{Count of $n$-gram}\\
+count of $\text{ngram}(q_i, n)$, $\text{ngram}(t_i, n)$, and $\text{ngram}(d_i, n)$.
+\item \textbf{Count \& Ratio of Digit}\\
+count \& ratio of digits in $q_i$, $t_i$, and $d_i$.
+\item \textbf{Count \& Ratio of Unique $n$-gram}\\
+count \& ratio of unique $\text{ngram}(q_i, n)$, $\text{ngram}(t_i, n)$, and $\text{ngram}(d_i, n)$.
+\item \textbf{Description Missing Indicator}\\
+binary indicator indicating whether $d_i$ is empty.
+\end{itemize}
+
+\subsubsection{Intersect Counting Features}
+\begin{itemize}
+\item \textbf{Count \& Ratio of $a$'s $n$-gram in $b$'s $n$-gram}\\
+Such features were computed for all the combinations of $a\in\{q_i, t_i, d_i\}$ and $b\in\{q_i, t_i, d_i\}$ ($a\neq b$).
+\end{itemize}
+
+\subsubsection{Intersect Position Features}
+\begin{itemize}
+\item \textbf{Statistics of Positions of $a$'s $n$-gram in $b$'s $n$-gram}\\
+For those intersect $n$-gram, we recorded their positions, and computed the following statistics as features.
+\begin{itemize}
+        \item minimum value (0\% quantile)
+        \item median value (50\% quantile)
+        \item maximum value (100\% quantile)
+        \item mean value
+        \item standard deviation (std)
+\end{itemize}
+\item \textbf{Statistics of Normalized Positions of a's $n$-gram in b's $n$-gram}\\
+These features are similar with above features, but computed using positions normalized by the length of $a$.
+\end{itemize}
+
+\subsection{Distance Features}
+\label{subsec:Distance_Features}
+Jaccard coefficient
+\begin{equation}
+\text{JaccardCoef}(A, B) = \frac{|A\cap{B}|}{|A\cup{B}|}
+\end{equation}
+and Dice distance
+\begin{equation}
+\text{DiceDist}(A, B) = \frac{2|A\cap{B}|}{|A|+|B|}
+\end{equation}
+are used as distance metrics, where $A$ and $B$ denote two sets respectively. For each distance metric, two types of features are computed.
+
+The file to generate such features is provided as \textbf{genFeat\_distance\_feat.py}.
+\subsubsection{Basic Distance Features}
+The following distances are computed as features
+\begin{itemize}
+\item $D(\text{ngram}(q_i, n), \text{ngram}(t_i, n))$
+\item $D(\text{ngram}(q_i, n), \text{ngram}(d_i, n))$
+\item $D(\text{ngram}(t_i, n), \text{ngram}(d_i, n))$
+\end{itemize}
+where $D(\cdot, \cdot)\in\{\text{JaccardCoef}(\text{set}(\cdot), \text{set}(\cdot)), \text{DiceDist}(\text{set}(\cdot), \text{set}(\cdot))\}$, and $\text{set}(\cdot)$ converts the input to a set.
+
+\subsubsection{Statistical Distance Features}
+\label{subsubsec:Statistical_Distance_Features}
+These features are inspired by Gilberto Titericz and Stanislav Semenov's winning solution \cite{Otto_1st} to Otto Group Product Classification Challenge on Kaggle. They are computed for \texttt{product\_title} and \texttt{product\_description}, respectively. Take \texttt{product\_title} for examples. They are computed in the following steps.
+\begin{enumerate}
+\item group the samples by \texttt{median\_relevance} and (\texttt{query}, \texttt{median\_relevance}).
+\begin{equation}
+G_r = \{i \,|\, r_i = r\}
+\end{equation}
+\begin{equation}
+G_{q,r} = \{i \,|\, q_i = q, r_i = r\}
+\end{equation}
+where $q\in{\{q_i\}}$ (i.e., all the unique \texttt{query}) and $r\in{\{1,2,3,4\}}$.
+\item compute distance between each sample and all the samples in each \texttt{median\_relevance} level. Note that we excluded the current sample being considered when computing the distance. For $G_{q,r}$, we considered the group with same query as the current sample.
+\begin{equation}
+S_{i,r,n} = \{D(\text{ngram}(t_i, n), \text{ngram}(t_j, n)) \,|\, j \in{G_r}, j \neq i \}
+\end{equation}
+\begin{equation}
+SQ_{i,r,n} = \{D(\text{ngram}(t_i, n), \text{ngram}(t_j, n)) \,|\, j \in{G_{q_i,r}}, j \neq i \}
+\end{equation}
+where $r\in{\{1,2,3,4\}}$ and $D(\cdot, \cdot)\in\{\text{JaccardCoef}(\cdot, \cdot), \text{DiceDist}(\cdot, \cdot)\}$.
+\item for $S_{i,r,n}$ and $SQ_{i,r,n}$, respectively, compute statistics such as
+    \begin{itemize}
+        \item minimum value (0\% quantile)
+        \item median value (50\% quantile)
+        \item maximum value (100\% quantile)
+        \item mean value
+        \item standard deviation (std)
+        \item more can be added, e.g., moment features and other quantiles
+    \end{itemize}
+    as features.
+\end{enumerate}
+
+\subsection{TF-IDF Based Features}
+We extracted various TF-IDF features and the corresponding dimensionality reduction version via SVD (i.e., LSA). We also computed the (basic) cosine similarity and statistical cosine similarity.
+\subsubsection{Basic TF-IDF Features}
+\label{subsubsec:Basic_TFIDF_Features}
+The file to generate such features is provided as \textbf{genFeat\_basic\_tfidf\_feat.py}.
+\begin{itemize}
+\item \textbf{TF-IDF Features}\\
+We extracted TF-IDF features from $\{q_i, t_i, d_i\}$, respectively. We considered unigram \& bigram \& trigram (in Sklearn's \texttt{TfidfVectorizer}, set \texttt{ngram\_range}=(1,3).)
+\
