@@ -349,4 +349,58 @@ Note that with ensemble selection, one can train model library with various feat
 \section{Modeling Techniques and Training}
 \subsection{Cross Validation Methodology}
 \subsubsection{The Split}
-Early in the competition, we have been using \texttt{StratifiedKFold} on \texttt{median\_relevance} or \texttt{query} with $k = 5$ or $k = 10$, but there was a large gap between our CV score a
+Early in the competition, we have been using \texttt{StratifiedKFold} on \texttt{median\_relevance} or \texttt{query} with $k = 5$ or $k = 10$, but there was a large gap between our CV score and Public LB score. We then changed our CV method to \texttt{StratifiedKFold} on \texttt{query} with $k = 3$, and used \emph{each 1 fold as training set} and \emph{the rest 2 folds as validation set}. This is to mimic the training-testing split of the data as pointed out by Kaggler @Silogram. With this strategy, our CV score tended to be more correlated with the Public LB score (see Table \ref{CV_LB}).
+\subsubsection{Following the Same Logic}
+Since this is an NLP related competition, it's common to use TF-IDF features. We have seen a few people fitting a TF-IDF transformer on the stacked training and testing set, and then transforming the training and testing set, respectively. They then use such feature vectors (\textbf{they are fixed}) for cross validation or grid search for the best parameters. They call such method as semi-supervised learning. In our opinion, if one is taking such method, he should refit the transformer using only the whole training set in CV, following the same logic.
+
+On the other hand, if one fit the transformer on the training set (for the final model building), then in CV, he should also refit the transformer on the training fold only. This is the method we used. Not only for TF-IDF transformer, but also for other transformations, e.g., normalization and SVD, one should make sure he is following the same logic in both CV and the final model building.
+
+\begin{table}[t]
+\centering
+\caption{CV score and LB score}
+    \label{CV_LB}
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+CV Mean   & CV Std  &  Public LB  &    Private LB   &   CV Method   &  Repeated Time\\
+\hline\hline
+0.642935  & 0.003694  &  0.63773   &  0.66185  & 3-fold CV     &     10\\
+0.661263  & 0.008021  &  0.66529   &  0.69208 &  3-fold CV     &     3\\
+0.664184  & 0.008027  &  0.66775   &  \textcolor{red}{0.69596} &  3-fold CV    &      3\\
+0.668797  & 0.008394  &  0.67020   &  0.69509 &  3-fold CV    &      3\\
+0.669313  & 0.007969  &  0.67166   &  0.69267 &  3-fold CV    &      3\\
+\textcolor{red}{0.669399}  & 0.006669  &  \textcolor{red}{0.67275}   &  0.69135 &  3-fold CV    &      3\\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Model Objective and Decoding Method}
+In this competition, submissions are scored based on the \emph{quadratic weighted kappa}, which measures the agreement between two ratings. This metric typically varies from 0 (random agreement between raters) to 1 (complete agreement between raters).
+
+Results have 4 possible ratings, $\{1,2,3,4\}$. Each search record is characterized by a tuple $(e_a,e_b)$, which corresponds to its scores by Rater A (human) and Rater B (predicted). The quadratic weighted kappa is calculated as follows. First, an $N\times{N}$ histogram matrix $O$ is constructed, such that $O_{i,j}$ corresponds to the number of search records that received a rating $i$ by A and a rating $j$ by B. An $N\times{N}$ matrix of weights, $w$, is calculated based on the difference between raters' scores:
+\begin{equation}
+w_{i,j} = \frac{(i-j)^2}{(N-1)^2}
+\end{equation}
+An $N\times{N}$ histogram matrix of expected ratings, $E$, is calculated, assuming that there is no correlation between rating scores. This is calculated as the outer product between each rater's histogram vector of ratings, normalized such that $E$ and O have the same sum.
+
+From these three matrices, the quadratic weighted kappa is calculated as:
+\begin{equation}
+\kappa = 1 - \frac{\sum_{i,j}w_{i,j}O_{i,j}}{\sum_{i,j}w_{i,j}E_{i,j}}
+\end{equation}
+
+\subsubsection{Classification}
+\label{subsubsec:Classification}
+Since the relevance score is in $\{1,2,3,4\}$, it is straightforward to apply multi-classification to the problem (using softmax loss). To convert the raw prediction (i.e., probabilities of four classes) to a single integer score, we can set it to the class label with the highest probability (i.e., \texttt{argmax}). However, we can achieve better score via the following strategy.
+\begin{enumerate}
+\item convert the four probabilities to a score via: $s = \sum_{i}iP_i$, i.e., weighted sum of the four probabilities.
+\item calculate the pdf/cdf of each \texttt{median\_relevance} level, 1 is about $7.6\%$, $1+2$ is about $22\%$, $1+2+3$ is about $40\%$, and $1+2+3+4$ is $100\%$.
+\item rank the raw prediction in an ascending order.
+\item set the first $7.6\%$ to 1, $7.6\%-22\%$ to 2, $22\%-40\%$ to 3, and the rest to 4.
+\end{enumerate}
+In CV, the pdf/cdf is calculated using training fold only, and in final model training, it is computed using the whole training data.
+
+This also applies to One-Against-All (OAA) classification, e.g., \texttt{LogisticRegression} in Sklearn.
+
+\subsubsection{Regression}
+Classification doesn't take into account the weight $w_{i,j}$ in $\kappa$, and the magnitude of the rating. With $w_{i,j}$'s form, it is convincing to apply regression (with mean-squared-error, MSE) to predict the relevance score. In prediction phase, we can convert the raw prediction score to $\{1,2,3,4\}$ following step 2-4 as in Sec. \ref{subsubsec:Classification}.
+
+Figure \ref{fig:MSE_decoding} shows some histograms from our reproduced best single model for one run of CV (only one validation fold is used). In specific, we plot histograms of 1) raw prediction, 2) rounding decoding, 3) ceiling decoding, and 4) the above cdf decoding, grouped by the true relevance. It's most obvious that both roundi
