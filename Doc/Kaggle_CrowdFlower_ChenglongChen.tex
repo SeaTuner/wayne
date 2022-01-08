@@ -403,4 +403,81 @@ This also applies to One-Against-All (OAA) classification, e.g., \texttt{Logisti
 \subsubsection{Regression}
 Classification doesn't take into account the weight $w_{i,j}$ in $\kappa$, and the magnitude of the rating. With $w_{i,j}$'s form, it is convincing to apply regression (with mean-squared-error, MSE) to predict the relevance score. In prediction phase, we can convert the raw prediction score to $\{1,2,3,4\}$ following step 2-4 as in Sec. \ref{subsubsec:Classification}.
 
-Figure \ref{fig:MSE_decoding} shows some histograms from our reproduced best single model for one run of CV (only one validation fold is used). In specific, we plot histograms of 1) raw prediction, 2) rounding decoding, 3) ceiling decoding, and 4) the above cdf decoding, grouped by the true relevance. It's most obvious that both roundi
+Figure \ref{fig:MSE_decoding} shows some histograms from our reproduced best single model for one run of CV (only one validation fold is used). In specific, we plot histograms of 1) raw prediction, 2) rounding decoding, 3) ceiling decoding, and 4) the above cdf decoding, grouped by the true relevance. It's most obvious that both rounding and ceiling decoding methods have difficulty in predicting relevance 4.
+
+Table \ref{tab:MSE_decoding} shows the kappa scores for each decoding method (using all 3 runs and 3 folds CV). The above cdf decoding method exhibits the best performance among the three methods we considered.
+
+It turns out that MSE (with the above decoding method) is the best objective among all the alternatives we have tried during the competition. For this reason, we mostly used regression to predict \texttt{median\_relevance}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.9\textwidth]{./compare_MSE_Decoding.pdf}
+\caption{Histograms of raw prediction and predictions using various decoding methods grouped by true relevance.}
+\label{fig:MSE_decoding}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\caption{Performance of various decoding methods for MSE objective.}
+\label{tab:MSE_decoding}
+\begin{tabular}{|c|c|c|}
+\hline
+Method & CV Mean & CV Std \\
+\hline
+Rounding & 0.404277 & 0.005069\\
+\hline
+Ceiling & 0.513138 & 0.006485\\
+\hline
+CDF & \textcolor{red}{0.681876} & 0.005259\\
+\hline
+\end{tabular}
+\end{table}
+
+\subsubsection{Pairwise Ranking}
+We have tried pairwise ranking (LambdaMart) within XGBoost, but didn't obtain acceptable performance (it was worse than softmax).
+
+\subsubsection{Oridinal Regression}
+We have also tried to treat the task as an ordinal regression problem, and have implemented the following two methods: EBC and COCR (and the corresponding decoding method). It turned out COCR has superior performance than EBC, but is on a similar edge with softmax.
+\begin{itemize}
+\item \textbf{Extended Binary Classification (EBC)}\\
+This method is implemented within the XGBoost framework using customized objective. The objective and the corresponding decoding method of this method are in file \texttt{./Code/Model/utils.py}: \texttt{ebcObj} and \texttt{applyEBCRule}, respectively. For details of the EBC method, please refer to \cite{ebc}.
+\item \textbf{Cost-sensitive Ordinal Classification via Regression (COCR)}\\
+This method is implemented within the XGBoost framework using customized objective too. The objective and the corresponding decoding method of this method are in file \texttt{./Code/Model/utils.py}: \texttt{cocrObj} and \texttt{applyCOCRRule}, respectively. For details of the COCR method, please refer to \cite{cocr}.
+\end{itemize}
+
+\subsubsection{Softkappa}
+We have tried to maximize $\kappa$ directly. To that goal, we re-write it in a soft-version using class probabilities. We denote $\hat{h}_{i,n}$ ($n\in{\{1,2,3,4\}}$) to be the predicted probability that the $i$-th sample is of $n$-th class. The corresponding raw score of $\hat{h}_{i,n}$ before softmax is denoted as $\hat{y}_{i,n}$. Thus, we have
+\begin{equation}
+\hat{h}_{i,n}=\frac{\exp(\hat{y}_{i,n})}{\sum_{m}\exp(\hat{y}_{i,m})}
+\end{equation}
+The soft version of $\kappa$, which we will refer to as softkappa is given as
+\begin{equation}
+\tilde{\kappa} = 1 - \frac{o}{e}
+\end{equation}
+where the enumerator is
+\begin{equation}
+o = \sum_{i,n} \frac{(r_i - n)^2}{(N-1)^2}\hat{h}_{i,n}
+\end{equation}
+and the denominator is
+\begin{equation}
+e = \sum_{m,n} \frac{(m - n)^2}{(N-1)^2} \big(\sum_i I\{r_i = n\}\big) \big(\sum_j \hat{h}_{j,m}\big)
+\end{equation}
+In the above equation, $I\{\cdot\}$ is the indicator function: $I\{\cdot\}=1$ if the condition is true, otherwise $I\{\cdot\}=0$.
+
+With these equations, we can derive the gradient and hessian of $\tilde{\kappa}$ with respect to $\hat{y}_{i,n}$, i.e., $\frac{\partial \tilde{\kappa}}{\partial \hat{y}_{i,n}}$ and $\frac{\partial^2 \tilde{\kappa}}{\partial \hat{y}_{i,n}^2}$. The results are coded in the file \texttt{./Code/Model/utils.py}: \texttt{softkappaObj}. The decoding method is the same as softmax and the performance is similar.
+
+\subsection{Sample Weighting}
+We are provided with the variance of the relevance scores given by raters. Such variance can be seem as a measure of the confidence of the ratings, and utilized to weight each sample. We have tried to weight the samples according to their variance, and it gives about 0.003 improvement. We have found the following weighting strategy works well in our models
+\begin{equation}
+w_i = \frac{1}{2}(1 + \frac{\hat{v}_{\max} - \hat{v}_i}{\hat{v}_{\max}})=1-\frac{\hat{v}_i}{2\hat{v}_{\max}}
+\end{equation}
+where $\hat{v}_i = \sqrt{v_i}$ and $\hat{v}_{\max} = \max_{i} \hat{v}_i$.
+
+Most of our models (see Table \ref{tab:Model_Library}) used weighted data, and a few didn't as to
+\begin{itemize}
+\item generate diverse predictions for the ensemble;
+\item sample weighting is not supported, e.g., \texttt{Lasso} in Sklearn.
+\end{itemize}
+
+\subsection{Ensemble Selection}
+For the ensemble, we use bagged ensemble selection \cite{ensemble_selection}. One interesting feature of ensemble selection is its ability to build an ensemble optimized to an arbitrary metric, e.g., quadratic weighted kappa used in this competition. We have also made some modifications to the original algorithm. Firstly, the model library is built with parameters of each model guided by a parameter searching algorithm. Secondly, model weight optimization is allowed in the procedure of ensemble selection. Thirdly, we used random weight for ensembling model similar as \texttt{ExtraTreesRegressor}. In the following, we
