@@ -1,0 +1,45 @@
+%\documentclass[10pt,twocolumn,twoside]{IEEEtran}
+%\documentclass[draftclsnofoot,onecolumn,12pt]{IEEEtran}
+%\documentclass[draftclsnofoot,onecolumn,11pt,peerreview]{IEEEtran}
+\documentclass[12pt]{article}
+\usepackage{fullpage}
+\usepackage{pgfplots}
+\usepackage{subfigure}
+\usepackage{tikz}
+
+\usepackage{makeidx}
+
+\usepackage[cmex10]{amsmath}
+\usepackage{amsthm,amssymb,mathrsfs}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{cite}
+%\usepackage{apacite}
+%\usepackage{natbib}
+\usepackage{lineno}
+\usepackage{verbatim}
+\usepackage{bm}
+\usepackage{multirow}
+\usepackage{booktabs}
+\usepackage{amsthm}
+\usepackage{array}
+%\usepackage[usenames,dvipsnames]{color}
+\usepackage{color,xcolor}
+\usepackage{framed}
+\usepackage{hyperref}
+\definecolor{shadecolor}{gray}{0.9}
+\newcommand*{\vertbar}{\rule[-0.75ex]{0.25pt}{2.5ex}}
+\newcommand*{\horzbar}{\rule[.5ex]{2.5ex}{0.25pt}}
+
+\begin{document}
+\title{Solution for the Search Results Relevance Challenge}
+\author{Chenglong~Chen}
+\maketitle
+
+\abstract{In the Search Results Relevance Challenge, we were asked to build a model to predict the relevance score of search results, given the searching queries, resulting product titles and product descriptions. This document describes our team's solution, which relies heavily on feature engineering and model ensembling.}
+
+\section*{Personal details}
+\begin{itemize}
+\item Name: Chenglong Chen
+\item Location: Guangzhou, Guangdong, China
+\item Email: \url{c.chenglon

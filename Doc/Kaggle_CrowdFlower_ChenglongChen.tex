@@ -638,4 +638,50 @@ We used Python 2.7.8, with the following libraries and modules:
 \item sklearn 0.16.1
 \item hyperopt (Developer version, \url{https://github.com/hyperopt/hyperopt})
 \item keras 0.1.1 (\url{https://github.com/fchollet/keras/releases/tag/0.1.1})
-\item XGBoost-0.4.0 (Windows Executable, \url{https://github.com/dmlc/XGBoost
+\item XGBoost-0.4.0 (Windows Executable, \url{https://github.com/dmlc/XGBoost/releases/tag/v0.40})
+\item ml\_metrics (\url{https://github.com/benhamner/Metrics/tree/master/Python/ml_metrics})
+\end{itemize}
+In addition to the above Python modules, we used
+\begin{itemize}
+\item rgf1.2 (Windows Executable, \url{http://stat.rutgers.edu/home/tzhang/software/rgf/})
+\item libfm-1.40.windows (Windows Executable, \url{http://www.libfm.org/})
+\end{itemize}
+
+\section{How To Generate the Solution (aka README file)}
+\begin{enumerate}
+\item download data from the competition website and put all the data into folder \texttt{./Data}.
+\item run \texttt{python ./Feat/run\_all.py} to generate feature set. This will take a few hours.
+\item run \texttt{python ./Model/generate\_best\_single\_model.py} to generate the best single model submission. In our experience, it only takes a few trials to generate model of best performance or similar performance. See the training log in \\ \texttt{./Output/Log/[Pre@solution]\_[Feat@svd100\_and\_bow\_Jun27]\\
+    \_[Model@reg\_xgb\_linear]\_hyperopt.log} for example.
+\item run \texttt{python ./Model/generate\_model\_library.py} to generate model library. This is quite time consuming. \textbf{But you don't have to wait for this script to finish: you can run the next step once you have some models trained.}
+\item run \texttt{python ./Model/generate\_ensemble\_submission.py} to generate submission via ensemble selection.
+\end{enumerate}
+
+\section{Additional Comments and Observations}
+Some interesting insights we got during the competition:
+\begin{itemize}
+\item spelling correction and synonyms replacement are very useful for searching query relevance prediction
+\item linear models can be much better than tree-based models or SVR with RBF/poly kernels when using raw TF-IDF features
+\item linear models can be even better if you introduce appropriate nonlinearities
+\item ensemble of a bunch of diverse models helps a lot
+\item Hyperopt is very useful for parameter tuning, and can be used to build model library for ensemble selection
+\end{itemize}
+
+This is a very interesting and educating competition. I have tried and learnt many things. However, there are still many things on my list I would like to explore. Among them, I am very interested in testing out the method presented in \cite{wmd} to this problem. In the paper, the author used Word Mover's Distance (WMD) metric together with \emph{word2vec} embeddings to measure the distance between text documents. This metric is shown to have superior performance than BOW and TF-IDF features.
+
+\section{Simple Features and Methods}
+Without any stacking or ensembling, the best (Public LB) single model we have obtained during the competition was an XGBoost model with linear booster. It is with Public LB score: \textbf{0.69322} and Private LB score: \textbf{0.70768}. Apart from the counting features and distance features, it used raw basic TF-IDF and raw cooccurrence TF-IDF.
+
+To reproduce the best single model, run\\
+\texttt{> python ./Code/Feat/combine\_feat\_[svd100\_and\_bow\_Jun27].py}\\
+to generate the feature set we used, and\\
+\texttt{> python ./Code/Model/generate\_best\_single\_model.py}\\
+to train the XGBoost model with linear booster. Note that due to randomness in the Hyperopt routine, it won't generate exactly the same score, but a score very similar or even better. Note that, you can also try other linear models, e.g., \texttt{Ridge} in Sklearn.
+
+\section{Acknowledgement}
+We would like to thank the DMLC team for developing the great machine learning package XGBoost, Fran\c{c}ois Chollet for developing package Keras, James Bergstra for developing package Hyperopt. We would also like to thank the Kaggle team and CrowdFlower for organizing this competition.
+
+\bibliographystyle{plain}
+\bibliography{reference}
+
+\end{document}
