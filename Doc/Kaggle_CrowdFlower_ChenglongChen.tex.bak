@@ -159,4 +159,91 @@ video games & videogames\\
 game pad & gamepad\\
 western digital & wd\\
 \hline
-\end{tabula
+\end{tabular}
+\end{table}
+
+\subsection{Stemming}
+We also performed stemming before generating features (e.g., counting features and BOW/TF-DF features) with Porter stemmer or Snowball stemmer from NLTK package (i.e., \texttt{nltk.stem.PorterStemmer()} and \texttt{nltk.stem.SnowballStemmer()}).
+
+\section{Feature Extraction/Selection}
+Before proceeding to describe the features, we first introduce some notations. We use tuple $(q_i, t_i, d_i)$ to denote the $i$-th sample in \texttt{train.csv} or \texttt{test.csv}, where $q_i$ is the \texttt{query}, $t_i$ is the \texttt{product\_title}, and $d_i$ is the \texttt{product\_description}. For \texttt{train.csv}, we further use $r_i$ and $v_i$ to denote \texttt{median\_relevance} and \texttt{relevance\_variance}\footnote{This is actually the standard deviation (std).}, respectively. We use function $\text{ngram}(s, n)$ to extract string/sentence $s$'s $n$-gram (splitted by whitespace), where $n\in\{1,2,3\}$ if not specified. For example
+\[
+\text{ngram}(\text{bridal shower decorations}, 2) = [\text{bridal shower}, \text{shower decorations}]\footnote{Note that this is a list (e.g., \texttt{list} in Python), not a set (e.g., \texttt{set} in Python).}
+\]
+
+\textbf{All the features are extracted for each run (i.e., repeated time) and fold (used in cross-validation and ensembling), and for the entire training and testing set (used in final model building and generating submission).}
+
+In the following, we will give a description of the features we have developed during the competition, which can be roughly divided into four types.
+\subsection{Counting Features}
+\label{subsec:Counting_Features}
+We generated counting features for $\{q_i, t_i, d_i\}$. For some of the counting features, we also computed the ratio following the suggestion from Owen Zhang \cite{owen}.
+
+The file to generate such features is provided as \textbf{genFeat\_counting\_feat.py}.
+\subsubsection{Basic Counting Features}
+\begin{itemize}
+\item \textbf{Count of $n$-gram}\\
+count of $\text{ngram}(q_i, n)$, $\text{ngram}(t_i, n)$, and $\text{ngram}(d_i, n)$.
+\item \textbf{Count \& Ratio of Digit}\\
+count \& ratio of digits in $q_i$, $t_i$, and $d_i$.
+\item \textbf{Count \& Ratio of Unique $n$-gram}\\
+count \& ratio of unique $\text{ngram}(q_i, n)$, $\text{ngram}(t_i, n)$, and $\text{ngram}(d_i, n)$.
+\item \textbf{Description Missing Indicator}\\
+binary indicator indicating whether $d_i$ is empty.
+\end{itemize}
+
+\subsubsection{Intersect Counting Features}
+\begin{itemize}
+\item \textbf{Count \& Ratio of $a$'s $n$-gram in $b$'s $n$-gram}\\
+Such features were computed for all the combinations of $a\in\{q_i, t_i, d_i\}$ and $b\in\{q_i, t_i, d_i\}$ ($a\neq b$).
+\end{itemize}
+
+\subsubsection{Intersect Position Features}
+\begin{itemize}
+\item \textbf{Statistics of Positions of $a$'s $n$-gram in $b$'s $n$-gram}\\
+For those intersect $n$-gram, we recorded their positions, and computed the following statistics as features.
+\begin{itemize}
+        \item minimum value (0\% quantile)
+        \item median value (50\% quantile)
+        \item maximum value (100\% quantile)
+        \item mean value
+        \item standard deviation (std)
+\end{itemize}
+\item \textbf{Statistics of Normalized Positions of a's $n$-gram in b's $n$-gram}\\
+These features are similar with above features, but computed using positions normalized by the length of $a$.
+\end{itemize}
+
+\subsection{Distance Features}
+\label{subsec:Distance_Features}
+Jaccard coefficient
+\begin{equation}
+\text{JaccardCoef}(A, B) = \frac{|A\cap{B}|}{|A\cup{B}|}
+\end{equation}
+and Dice distance
+\begin{equation}
+\text{DiceDist}(A, B) = \frac{2|A\cap{B}|}{|A|+|B|}
+\end{equation}
+are used as distance metrics, where $A$ and $B$ denote two sets respectively. For each distance metric, two types of features are computed.
+
+The file to generate such features is provided as \textbf{genFeat\_distance\_feat.py}.
+\subsubsection{Basic Distance Features}
+The following distances are computed as features
+\begin{itemize}
+\item $D(\text{ngram}(q_i, n), \text{ngram}(t_i, n))$
+\item $D(\text{ngram}(q_i, n), \text{ngram}(d_i, n))$
+\item $D(\text{ngram}(t_i, n), \text{ngram}(d_i, n))$
+\end{itemize}
+where $D(\cdot, \cdot)\in\{\text{JaccardCoef}(\text{set}(\cdot), \text{set}(\cdot)), \text{DiceDist}(\text{set}(\cdot), \text{set}(\cdot))\}$, and $\text{set}(\cdot)$ converts the input to a set.
+
+\subsubsection{Statistical Distance Features}
+\label{subsubsec:Statistical_Distance_Features}
+These features are inspired by Gilberto Titericz and Stanislav Semenov's winning solution \cite{Otto_1st} to Otto Group Product Classification Challenge on Kaggle. They are computed for \texttt{product\_title} and \texttt{product\_description}, respectively. Take \texttt{product\_title} for examples. They are computed in the following steps.
+\begin{enumerate}
+\item group the samples by \texttt{median\_relevance} and (\texttt{query}, \texttt{median\_relevance}).
+\begin{equation}
+G_r = \{i \,|\, r_i = r\}
+\end{equation}
+\begin{equation}
+G_{q,r} = \{i \,|\, q_i = q, r_i = r\}
+\end{equation}
+where $q\in{\{q_i\}}$ (i.e., all the unique \texttt{query}) and $r\in{\{1,2,3,4\}}$.
+\item compute distance between each sample and all the samples in each \texttt{med
