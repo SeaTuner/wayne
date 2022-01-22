@@ -459,4 +459,74 @@ Most of our models (see Table \ref{tab:Model_Library}) used weighted data, and a
 \end{itemize}
 
 \subsection{Ensemble Selection}
-For the ensemble, we use bagged ensemble selection \cite{ensemble_selection}. One interesting feature of ensemble selection is its ability to build an ensembl
+For the ensemble, we use bagged ensemble selection \cite{ensemble_selection}. One interesting feature of ensemble selection is its ability to build an ensemble optimized to an arbitrary metric, e.g., quadratic weighted kappa used in this competition. We have also made some modifications to the original algorithm. Firstly, the model library is built with parameters of each model guided by a parameter searching algorithm. Secondly, model weight optimization is allowed in the procedure of ensemble selection. Thirdly, we used random weight for ensembling model similar as \texttt{ExtraTreesRegressor}. In the following, we will detail our ensemble methodology.
+
+\subsubsection{Model Library Building via Guided Parameter Searching}
+Ensemble selection needs a model library contains lots (hundreds or thousands) of models trained used different algorithm (e.g., XGBoost or NN, see Table \ref{tab:Model_Library} for the algorithms we used) or different parameters (how may trees/layers/hidden units) or different feature sets. For each algorithm, we specified a parameter space, and used TPE method \cite{hyperopt} in Hyperopt package \cite{hyperopt_url} for parameter searching. It not only find the best parameter setting for each algorithm, but also create a model library with various parameter settings guided or provided by Hyperopt.
+
+During parameter searching, we trained a model with each parameter setting on training fold for each run and each fold in cross-validation, and saved the rank of the prediction of the validation fold to disk. Note that such rank was obtained using the corresponding decoding method as in step 2-4 of Sec. \ref{subsubsec:Classification}. They were used in ensemble selection to find the best ensemble. We also trained a model with the same parameter setting on the whole training set, and saved the rank of the prediction of the testing set. Such rank predictions were used for generating the final ensemble submission.
+\begin{table}[t]
+\centering
+\caption{Model Library}
+    \label{tab:Model_Library}
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+Package   & \multicolumn{2}{c|}{Model}    & Feature & Weighting\\
+\hline\hline
+\multirow{8}*{XGBoost}  & \multirow{4}*{\texttt{gblinear}}  &  MSE & \multirow{4}*{High/Low}& \multirow{4}*{Yes}\\ \cline{3-3}
+ &   &    COCR & &\\ \cline{3-3}
+  &   &  Softmax  & &\\ \cline{3-3}
+  &   &  Softkappa & &\\ \cline{3-3}
+\cline{2-5}
+  & \multirow{4}*{\texttt{gbtree}}  &  MSE  & \multirow{4}*{Low}& \multirow{4}*{Yes}\\ \cline{3-3}
+ &   &    COCR & &\\ \cline{3-3}
+  &   &  Softmax & &\\ \cline{3-3}
+  &   &  Softkappa & &\\ \cline{3-3}
+\hline
+\multirow{7}*{Sklearn} & \multicolumn{2}{c|}{\texttt{GradientBoostingRegressor}} & Low & Yes\\ \cline{2-5}
+  & \multicolumn{2}{c|}{\texttt{ExtraTreesRegressor}}      & Low & Yes\\ \cline{2-5}
+  & \multicolumn{2}{c|}{\texttt{RandomForestRegressor}} & Low & Yes\\ \cline{2-5}
+  & \multicolumn{2}{c|}{\texttt{SVR}}                            & Low & Yes\\ \cline{2-5}
+  & \multicolumn{2}{c|}{\texttt{Ridge}}                & High/Low & Yes\\ \cline{2-5}
+  & \multicolumn{2}{c|}{\texttt{Lasso}}                 & High/Low & No\\ \cline{2-5}
+  & \multicolumn{2}{c|}{\texttt{LogisticRegression}}   & High/Low & No\\ \hline
+Keras & \multicolumn{2}{c|}{NN Regression}                         & Low & No  \\ \hline
+RGF & \multicolumn{2}{c|}{Regression}                              & Low  & No  \\ \hline
+\end{tabular}
+\end{table}
+\subsubsection{Model Weight Optimization}
+In the original ensemble selection algorithm, the model is added to the ensemble with hard weight 1. However, this is not guaranteed for best performance. We have modified it to allow weight optimized for each model when adding to the ensemble. The weight is optimized with Hyeropt too. This gives better performance than hard weight 1 in our preliminary comparison.
+
+\subsubsection{Randomized Ensemble Selection}
+The final method we used to generate the winning solution is actually without model weight optimization. On the contrary, we replaced weight optimization with \textbf{random weight}. This is inspired by the \texttt{ExtraTreesRegressor} to reduce the model variance (or the risk of overfitting).
+
+Figure \ref{fig:CV_Public_Private} shows the CV mean, Public LB, and Private LB scores of our 35 best Public LB submissions generated with this method. As shown, CV score is correlated with the Public LB and Private LB, while it's more correlated with the latter. As time went by, we have trained more and more different models, which turned out to be helpful for ensemble selection in both CV and Private LB (as shown in Figure \ref{fig:CV_Public_Private}).
+
+The winning submission that scored \textbf{0.70807} on Public LB and \textbf{0.72189} on Private LB is just a median ensemble of these 35 best Public LB submissions.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  xmin=0,
+  xmax=36,
+  %xtick={0,5,...,35},
+  %xticklabel=$\pgfmathprintnumber{\tick}$,
+  xtick=\empty,
+  ylabel=$\kappa$,
+  xlabel=$\longrightarrow \text{Time} \longrightarrow$,
+  grid=major,
+  grid style={dashed},
+  legend columns=3,
+legend style={at={(0.5,1.05)},anchor=south}
+  ]
+\pgfplotstableread{35lb_subs.txt}\loadedtable
+\addplot +[error bars/.cd,
+y dir=both,y explicit,
+error mark=-] table[x index=0,y index=1,y error index=2,header=false] {\loadedtable};
+\addplot +[smooth] table[x index=0,y index=3,header=false] {\loadedtable};
+\addplot +[smooth] table[x index=0,y index=4,header=false] {\loadedtable};
+\legend{%
+CV mean,%
+Public LB,%
+Priv
