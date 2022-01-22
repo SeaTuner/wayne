@@ -389,4 +389,74 @@ From these three matrices, the quadratic weighted kappa is calculated as:
 
 \subsubsection{Classification}
 \label{subsubsec:Classification}
-Since the relevance score is in $\{1,2,3,4\}$, it is straightforward to apply multi-classification to the problem (using softmax loss). To convert the raw prediction (i.e., probabilities of four classes) to a single integer score, we can set it to the class label with the highest p
+Since the relevance score is in $\{1,2,3,4\}$, it is straightforward to apply multi-classification to the problem (using softmax loss). To convert the raw prediction (i.e., probabilities of four classes) to a single integer score, we can set it to the class label with the highest probability (i.e., \texttt{argmax}). However, we can achieve better score via the following strategy.
+\begin{enumerate}
+\item convert the four probabilities to a score via: $s = \sum_{i}iP_i$, i.e., weighted sum of the four probabilities.
+\item calculate the pdf/cdf of each \texttt{median\_relevance} level, 1 is about $7.6\%$, $1+2$ is about $22\%$, $1+2+3$ is about $40\%$, and $1+2+3+4$ is $100\%$.
+\item rank the raw prediction in an ascending order.
+\item set the first $7.6\%$ to 1, $7.6\%-22\%$ to 2, $22\%-40\%$ to 3, and the rest to 4.
+\end{enumerate}
+In CV, the pdf/cdf is calculated using training fold only, and in final model training, it is computed using the whole training data.
+
+This also applies to One-Against-All (OAA) classification, e.g., \texttt{LogisticRegression} in Sklearn.
+
+\subsubsection{Regression}
+Classification doesn't take into account the weight $w_{i,j}$ in $\kappa$, and the magnitude of the rating. With $w_{i,j}$'s form, it is convincing to apply regression (with mean-squared-error, MSE) to predict the relevance score. In prediction phase, we can convert the raw prediction score to $\{1,2,3,4\}$ following step 2-4 as in Sec. \ref{subsubsec:Classification}.
+
+It turns out that MSE is the best objective among all the alternatives we have tried during the competition. For this reason, we mostly used regression to predict \texttt{median\_relevance}.
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=0.9\textwidth]{./FlowChart.pdf}
+\caption{The flowchart of our method.}
+\label{fig:Flowchart}
+\end{figure}
+
+\subsubsection{Pairwise Ranking}
+We have tried pairwise ranking (LambdaMart) within XGBoost, but didn't obtain acceptable performance (it was worse than softmax).
+
+\subsubsection{Oridinal Regression}
+We have also tried to treat the task as an ordinal regression problem, and have implemented the following two methods: EBC and COCR (and the corresponding decoding method). It turned out COCR has superior performance than EBC, but is on a similar edge with softmax.
+\begin{itemize}
+\item \textbf{Extended Binary Classification (EBC)}\\
+This method is implemented within the XGBoost framework using customized objective. The objective and the corresponding decoding method of this method are in file \texttt{./Code/Model/utils.py}: \texttt{ebcObj} and \texttt{applyEBCRule}, respectively. For details of the EBC method, please refer to \cite{ebc}.
+\item \textbf{Cost-sensitive Ordinal Classification via Regression (COCR)}\\
+This method is implemented within the XGBoost framework using customized objective too. The objective and the corresponding decoding method of this method are in file \texttt{./Code/Model/utils.py}: \texttt{cocrObj} and \texttt{applyCOCRRule}, respectively. For details of the COCR method, please refer to \cite{cocr}.
+\end{itemize}
+
+\subsubsection{Softkappa}
+We have tried to maximize $\kappa$ directly. To that goal, we re-write it in a soft-version using class probabilities. We denote $\hat{h}_{i,n}$ ($n\in{\{1,2,3,4\}}$) to be the predicted probability that the $i$-th sample is of $n$-th class. The corresponding raw score of $\hat{h}_{i,n}$ before softmax is denoted as $\hat{y}_{i,n}$. Thus, we have
+\begin{equation}
+\hat{h}_{i,n}=\frac{\exp(\hat{y}_{i,n})}{\sum_{m}\exp(\hat{y}_{i,m})}
+\end{equation}
+The soft version of $\kappa$, which we will refer to as softkappa is given as
+\begin{equation}
+\tilde{\kappa} = 1 - \frac{o}{e}
+\end{equation}
+where the enumerator is
+\begin{equation}
+o = \sum_{i,n} \frac{(r_i - n)^2}{(N-1)^2}\hat{h}_{i,n}
+\end{equation}
+and the denominator is
+\begin{equation}
+e = \sum_{m,n} \frac{(m - n)^2}{(N-1)^2} \big(\sum_i I\{r_i = n\}\big) \big(\sum_j \hat{h}_{j,m}\big)
+\end{equation}
+In the above equation, $I\{\cdot\}$ is the indicator function: $I\{\cdot\}=1$ if the condition is true, otherwise $I\{\cdot\}=0$.
+
+With these equations, we can derive the gradient and hessian of $\tilde{\kappa}$ with respect to $\hat{y}_{i,n}$, i.e., $\frac{\partial \tilde{\kappa}}{\partial \hat{y}_{i,n}}$ and $\frac{\partial^2 \tilde{\kappa}}{\partial \hat{y}_{i,n}^2}$. The results are coded in the file \texttt{./Code/Model/utils.py}: \texttt{softkappaObj}. The decoding method is the same as softmax and the performance is similar.
+
+\subsection{Sample Weighting}
+We are provided with the variance of the relevance scores given by raters. Such variance can be seem as a measure of the confidence of the ratings, and utilized to weight each sample. We have tried to weight the samples according to their variance, and it gives about 0.003 improvement. We have found the following weighting strategy works well in our models
+\begin{equation}
+w_i = \frac{1}{2}(1 + \frac{\hat{v}_{\max} - \hat{v}_i}{\hat{v}_{\max}})=1-\frac{\hat{v}_i}{2\hat{v}_{\max}}
+\end{equation}
+where $\hat{v}_i = \sqrt{v_i}$ and $\hat{v}_{\max} = \max_{i} \hat{v}_i$.
+
+Most of our models (see Table \ref{tab:Model_Library}) used weighted data, and a few didn't as to
+\begin{itemize}
+\item generate diverse predictions for the ensemble;
+\item sample weighting is not supported, e.g., \texttt{Lasso} in Sklearn.
+\end{itemize}
+
+\subsection{Ensemble Selection}
+For the ensemble, we use bagged ensemble selection \cite{ensemble_selection}. One interesting feature of ensemble selection is its ability to build an ensembl
