@@ -529,4 +529,82 @@ error mark=-] table[x index=0,y index=1,y error index=2,header=false] {\loadedta
 \legend{%
 CV mean,%
 Public LB,%
-Priv
+Private LB}
+\end{axis}
+\end{tikzpicture}
+\caption{CV mean, Public LB, and Private LB scores of our 35 best Public LB submissions generating with randomized ensemble selection. One standard deviation of the CV score is plotted via error bar.}
+\label{fig:CV_Public_Private}
+\end{figure}
+
+\section{Code Description}
+The implementation is organized in the following three parts.
+
+\subsection{Setting}
+\begin{itemize}
+\item \textbf{param\_config.py}: This file provides parameter configurations for the project.
+\end{itemize}
+
+\subsection{Feature}
+All the files are in the folder \texttt{./Code/Feat}.
+\begin{itemize}
+\item \textbf{ngram.py}: This file provides functions to compute n-gram \& n-term.
+\item \textbf{replacer.py}: This file provides functions to perform synonym \& antonym replacement. Such functions are adopted from \cite{NLTK_Cookbook} (Chapter 2, Page 39-43.)
+\item \textbf{nlp\_utils.py}: This file provides functions to perform NLP task, e.g., TF-IDF and POS tagging.
+\item \textbf{feat\_utils.py}: This file provides utils for generating features.
+\item \textbf{preprocess.py}: This file preprocesses data.
+\item \textbf{gen\_info.py}: This file generates the following info for each run and fold, and for the entire training and testing set.
+        \begin{enumerate}
+            \item training and validation/testing data
+            \item sample weight
+            \item cdf of the \texttt{median\_relevance}
+            \item the group info for pairwise ranking in XGBoost
+        \end{enumerate}
+\item \textbf{gen\_kfold.py}: This file generates the \texttt{StratifiedKFold} sample indices which will be kept fixed in \textbf{ALL} the following feature extraction and model building parts. The sample indices we used during the competition are provided in folder \texttt{./Data}, i.e., \texttt{stratifiedKFold.query.pkl} and \texttt{stratifiedKFold.relevance.pkl}. They are stratified on \texttt{query} and \texttt{median\_relevance}, respectively.
+\item \textbf{genFeat\_id\_feat.py}: This file generates the following features for each run and fold, and for the entire training and testing set.
+    \begin{enumerate}
+    \item one-hot encoding of query ids (qid)
+    \end{enumerate}
+\item \textbf{genFeat\_counting\_feat.py}: This file generates the counting features described in Sec. \ref{subsec:Counting_Features} for each run and fold, and for the entire training and testing set.
+\item \textbf{genFeat\_distance\_feat.py}: This file generates the distance features described in Sec. \ref{subsec:Distance_Features} for each run and fold, and for the entire training and testing set.
+\item \textbf{genFeat\_basic\_tfidf\_feat.py}: This file generates the basic TF-IDF features described in Sec. \ref{subsubsec:Basic_TFIDF_Features} for each run and fold, and for the entire training and testing set.
+\item \textbf{genFeat\_cooccurrence\_tfidf\_feat.py}: This file generates the cooccurrence TF-IDF features described in Sec. \ref{subsubsec:Cooccurrence_TFIDF_Features} for each run and fold, and for the entire training and testing set.
+\item \textbf{combine\_feat.py}: This file provides modules to combine features and save them in svmlight format.
+\item \textbf{combine\_feat\_[LSA\_and\_stats\_feat\_Jun09]\_[Low].py}: This file generates one combination of feature set (Low).
+\item \textbf{combine\_feat\_[LSA\_svd150\_and\_Jaccard\_coef\_Jun14]\_[Low].py}: This file generates one combination of feature set (Low).
+\item \textbf{combine\_feat\_[svd100\_and\_bow\_Jun23]\_[Low].py}: This file generates one combination of feature set (Low).
+\item \textbf{combine\_feat\_[svd100\_and\_bow\_Jun27]\_[High].py}: This file generates one combination of feature set (High).
+    \textbf{Such features are used to generate the best single model with linear model}, e.g.,
+    \begin{itemize}
+        \item XGBoost with linear booster (MSE objective)
+        \item \texttt{Ridge} in Sklearn
+    \end{itemize}
+\item \textbf{run\_all.py}: This file generates all the features and feature sets in one shot.
+\end{itemize}
+
+\subsection{Model}
+\begin{itemize}
+\item \textbf{utils.py}: This file provides functions for
+        \begin{itemize}
+        \item various customized objectives used together with XGBoost
+        \item various decoding method for different objectives
+            \begin{itemize}
+            \item MSE
+            \item Pairwise ranking
+            \item Softmax
+            \item Softkappa
+            \item EBC
+            \item COCR
+            \end{itemize}
+        \end{itemize}
+\item \textbf{ml\_metrics.py}: This file provides functions to compute quadratic weighted kappa. It is adopted from \url{https://github.com/benhamner/Metrics/tree/master/Python/ml_metrics}.
+\item \textbf{train\_model.py}: This file trains various models.
+\item \textbf{generate\_best\_single\_model.py}: This file generates the best single model.
+\item \textbf{model\_library\_config.py}: This file provides model library configurations for ensemble selection.
+\item \textbf{generate\_model\_library.py}: This file generates model library for ensemble selection.
+\item \textbf{ensemble\_selection.py}: This file contains ensemble selection module.
+\item \textbf{generate\_ensemble\_submission}: This file generates submission via ensemble selection.
+\end{itemize}
+
+\section{Dependencies}
+We used Python 2.7.8, with the following libraries and modules:
+\begin{it
