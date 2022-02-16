@@ -30,4 +30,17 @@
 \BOOKMARK [3][-]{subsubsection.4.2.3}{Pairwise Ranking}{subsection.4.2}% 30
 \BOOKMARK [3][-]{subsubsection.4.2.4}{Oridinal Regression}{subsection.4.2}% 31
 \BOOKMARK [3][-]{subsubsection.4.2.5}{Softkappa}{subsection.4.2}% 32
-\BOOKMARK [2][-]{subsection.4.3}{Sample
+\BOOKMARK [2][-]{subsection.4.3}{Sample Weighting}{section.4}% 33
+\BOOKMARK [2][-]{subsection.4.4}{Ensemble Selection}{section.4}% 34
+\BOOKMARK [3][-]{subsubsection.4.4.1}{Model Library Building via Guided Parameter Searching}{subsection.4.4}% 35
+\BOOKMARK [3][-]{subsubsection.4.4.2}{Model Weight Optimization}{subsection.4.4}% 36
+\BOOKMARK [3][-]{subsubsection.4.4.3}{Randomized Ensemble Selection}{subsection.4.4}% 37
+\BOOKMARK [1][-]{section.5}{Code Description}{}% 38
+\BOOKMARK [2][-]{subsection.5.1}{Setting}{section.5}% 39
+\BOOKMARK [2][-]{subsection.5.2}{Feature}{section.5}% 40
+\BOOKMARK [2][-]{subsection.5.3}{Model}{section.5}% 41
+\BOOKMARK [1][-]{section.6}{Dependencies}{}% 42
+\BOOKMARK [1][-]{section.7}{How To Generate the Solution \(aka README file\)}{}% 43
+\BOOKMARK [1][-]{section.8}{Additional Comments and Observations}{}% 44
+\BOOKMARK [1][-]{section.9}{Simple Features and Methods}{}% 45
+\BOOKMARK [1][-]{section.10}{Acknowledgement}{}% 46
