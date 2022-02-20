@@ -410,4 +410,143 @@ e.tex)
 (D:\CTEX\MiKTeX\tex\generic\pgfplots\util\pgfplotsutil.verb.code.tex)
 (D:\CTEX\MiKTeX\tex\generic\pgfplots\libs\pgflibrarypgfplots.surfshading.code.t
 ex
-\c@pg
+\c@pgfplotslibrarysurf@no=\count125
+
+(D:\CTEX\MiKTeX\tex\generic\pgfplots\sys\pgflibrarypgfplots.surfshading.pgfsys-
+pdftex.def)))
+(D:\CTEX\MiKTeX\tex\generic\pgfplots\util\pgfplotscolormap.code.tex)
+(D:\CTEX\MiKTeX\tex\generic\pgfplots\pgfplotsstackedplots.code.tex)
+(D:\CTEX\MiKTeX\tex\generic\pgfplots\pgfplotsplothandlers.code.tex
+(D:\CTEX\MiKTeX\tex\generic\pgfplots\pgfplotsmeshplothandler.code.tex))
+(D:\CTEX\MiKTeX\tex\generic\pgfplots\pgfplotscoordprocessing.code.tex)
+(D:\CTEX\MiKTeX\tex\generic\pgfplots\pgfplotsticks.code.tex)
+(D:\CTEX\MiKTeX\tex\generic\pgfplots\pgfplots.paths.code.tex)
+(D:\CTEX\MiKTeX\tex\generic\pgf\frontendlayer\tikz\libraries\tikzlibrarydecorat
+ions.code.tex
+(D:\CTEX\MiKTeX\tex\generic\pgf\modules\pgfmoduledecorations.code.tex
+\pgfdecoratedcompleteddistance=\dimen159
+\pgfdecoratedremainingdistance=\dimen160
+\pgfdecoratedinputsegmentcompleteddistance=\dimen161
+\pgfdecoratedinputsegmentremainingdistance=\dimen162
+\pgf@decorate@distancetomove=\dimen163
+\pgf@decorate@repeatstate=\count126
+\pgfdecorationsegmentamplitude=\dimen164
+\pgfdecorationsegmentlength=\dimen165
+)
+\tikz@lib@dec@box=\box37
+)
+(D:\CTEX\MiKTeX\tex\generic\pgf\frontendlayer\tikz\libraries\tikzlibrarydecorat
+ions.pathmorphing.code.tex
+(D:\CTEX\MiKTeX\tex\generic\pgf\libraries\decorations\pgflibrarydecorations.pat
+hmorphing.code.tex))
+(D:\CTEX\MiKTeX\tex\generic\pgf\frontendlayer\tikz\libraries\tikzlibrarydecorat
+ions.pathreplacing.code.tex
+(D:\CTEX\MiKTeX\tex\generic\pgf\libraries\decorations\pgflibrarydecorations.pat
+hreplacing.code.tex))
+\pgfplots@numplots=\count127
+\pgfplots@xmin@reg=\dimen166
+\pgfplots@xmax@reg=\dimen167
+\pgfplots@ymin@reg=\dimen168
+\pgfplots@ymax@reg=\dimen169
+\pgfplots@zmin@reg=\dimen170
+\pgfplots@zmax@reg=\dimen171
+)
+(D:\CTEX\MiKTeX\tex\generic\pgf\frontendlayer\tikz\libraries\tikzlibraryplotmar
+ks.code.tex
+File: tikzlibraryplotmarks.code.tex 2008/01/09 v2.10 (rcs-revision 1.1)
+
+(D:\CTEX\MiKTeX\tex\generic\pgf\libraries\pgflibraryplotmarks.code.tex
+File: pgflibraryplotmarks.code.tex 2010/10/15 v2.10 (rcs-revision 1.12)
+)))
+(D:\CTEX\MiKTeX\tex\latex\subfigure\subfigure.sty
+Package: subfigure 2002/07/30 v2.1.4 subfigure package
+\subfigtopskip=\skip46
+\subfigcapskip=\skip47
+\subfigcaptopadj=\dimen172
+\subfigbottomskip=\skip48
+\subfigcapmargin=\dimen173
+\subfiglabelskip=\skip49
+\c@subfigure=\count128
+\c@lofdepth=\count129
+\c@subtable=\count130
+\c@lotdepth=\count131
+
+****************************************
+* Local config file subfigure.cfg used *
+****************************************
+(D:\CTEX\MiKTeX\tex\latex\subfigure\subfigure.cfg)
+\subfig@top=\skip50
+\subfig@bottom=\skip51
+)
+(D:\CTEX\MiKTeX\tex\generic\pgf\frontendlayer\tikz\libraries\tikzlibrarybackgro
+unds.code.tex
+File: tikzlibrarybackgrounds.code.tex 2010/02/08 v2.10 (rcs-revision 1.2)
+\pgf@layerbox@background=\box38
+\pgf@layerboxsaved@background=\box39
+)
+(D:\CTEX\MiKTeX\tex\generic\pgf\frontendlayer\tikz\libraries\tikzlibraryautomat
+a.code.tex
+File: tikzlibraryautomata.code.tex 2008/07/14 v2.10 (rcs-revision 1.3)
+
+(D:\CTEX\MiKTeX\tex\generic\pgf\frontendlayer\tikz\libraries\tikzlibraryshapes.
+multipart.code.tex
+File: tikzlibraryshapes.multipart.code.tex 2008/01/09 v2.10 (rcs-revision 1.1)
+
+(D:\CTEX\MiKTeX\tex\generic\pgf\libraries\shapes\pgflibraryshapes.multipart.cod
+e.tex
+File: pgflibraryshapes.multipart.code.tex 2010/01/07 v2.10 (rcs-revision 1.2)
+\pgfnodepartlowerbox=\box40
+\pgfnodeparttwobox=\box41
+\pgfnodepartthreebox=\box42
+\pgfnodepartfourbox=\box43
+\pgfnodeparttwentybox=\box44
+\pgfnodepartnineteenbox=\box45
+\pgfnodeparteighteenbox=\box46
+\pgfnodepartseventeenbox=\box47
+\pgfnodepartsixteenbox=\box48
+\pgfnodepartfifteenbox=\box49
+\pgfnodepartfourteenbox=\box50
+\pgfnodepartthirteenbox=\box51
+\pgfnodeparttwelvebox=\box52
+\pgfnodepartelevenbox=\box53
+\pgfnodeparttenbox=\box54
+\pgfnodepartninebox=\box55
+\pgfnodeparteightbox=\box56
+\pgfnodepartsevenbox=\box57
+\pgfnodepartsixbox=\box58
+\pgfnodepartfivebox=\box59
+)))
+(D:\CTEX\MiKTeX\tex\generic\pgfplots\libs\tikzlibrarypgfplots.external.code.tex
+
+(D:\CTEX\MiKTeX\tex\latex\pgf\frontendlayer\libraries\tikzlibraryexternal.code.
+tex
+(D:\CTEX\MiKTeX\tex\generic\pgf\frontendlayer\tikz\libraries\tikzexternalshared
+.code.tex
+\tikzexternal@outfile=\write4
+)))
+No file 35lb_subs.aux.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 17.
+LaTeX Font Info:    ... okay on input line 17.
+ABD: EveryShipout initializing macros
+(D:\CTEX\MiKTeX\tex\context\base\supp-pdf.mkii
+[Loading MPS to PDF converter (version 2006.09.02).]
+\scratchcounter=\count132
+\scratchdimen=\dimen174
+\scratchbox=\box60
+\nofMPsegments=\count133
+\nofMParguments=\count134
+\everyMPshowfont=\toks36
+\MPscratchCnt=\count135
+\MPscratchDim=\dimen175
+\MPnumerator=\count136
+\make
