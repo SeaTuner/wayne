@@ -549,4 +549,37 @@ ABD: EveryShipout initializing macros
 \MPscratchCnt=\count135
 \MPscratchDim=\dimen175
 \MPnumerator=\count136
-\make
+\makeMPintoPDFobject=\count137
+\everyMPtoPDFconversion=\toks37
+)
+===== 'mode=convert with system call': Invoking 'pdflatex -enable-write18 -halt
+-on-error -interaction=batchmode -jobname "35lb_subs-figure0" "\def\tikzexterna
+lrealjob{35lb_subs}\input{35lb_subs}"' ========
+runsystem(pdflatex -enable-write18 -halt-on-error -interaction=batchmode -jobna
+me "35lb_subs-figure0" "\def\tikzexternalrealjob{35lb_subs}\input{35lb_subs}").
+..executed.
+
+[1{D:/CTEX/UserData/pdftex/config/pdftex.map{Unicode.sfd}{UGBK.sfd}} <F:/CrowdF
+olwer/cleanup/Fig/35lb_subs-figure0.pdf>]
+(F:\CrowdFolwer\cleanup\Fig\35lb_subs.aux)
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
+ ) 
+Here is how much of TeX's memory you used:
+ 17297 strings out of 495354
+ 411800 string characters out of 3183859
+ 502484 words of memory out of 3000000
+ 20151 multiletter control sequences out of 15000+200000
+ 3640 words of font info for 14 fonts, out of 3000000 for 9000
+ 14 hyphenation exceptions out of 8191
+ 63i,5n,74p,654b,609s stack positions out of 5000i,500n,10000p,200000b,50000s
+<D:/CTEX/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi10.pfb><D:/CTEX/MiKTeX/fon
+ts/type1/public/amsfonts/cm/cmr10.pfb><D:/CTEX/MiKTeX/fonts/type1/public/amsfon
+ts/cm/cmsy10.pfb>
+Output written on 35lb_subs.pdf (1 page, 48066 bytes).
+PDF statistics:
+ 31 PDF objects out of 1000 (max. 8388607)
+ 0 named destinations out of 1000 (max. 500000)
+ 18 words of extra memory for PDF output out of 10000 (max. 10000000)
+
