@@ -23,4 +23,5 @@ trial_counter,kappa_mean,kappa_std,batch_norm,batch_size,hidden_activation,hidde
 22,0.637971,0.008341,True,32,relu,0.1,3,64,0.1,200,40,reg_keras_dnn
 23,0.650643,0.009780,True,32,relu,0.2,3,128,0.2,200,40,reg_keras_dnn
 24,0.669145,0.004980,True,32,relu,0.8,3,512,0.5,200,30,reg_keras_dnn
-25,0.658415,0.004286,True,32,relu,0.9,3,512,0.5,200,40,reg_keras_dn
+25,0.658415,0.004286,True,32,relu,0.9,3,512,0.5,200,40,reg_keras_dnn
+26,0.619666,0.004901,True,32,relu,0.9,4,512,0.5,200,30,reg_keras_dnn
