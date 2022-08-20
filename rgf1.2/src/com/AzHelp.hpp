@@ -83,4 +83,205 @@ public:
 
     AzBytArr s(desc); 
     if (s.length() > 0) {
-      s.c(" ("); s.c(name); 
+      s.c(" ("); s.c(name); s.c(")"); 
+      AzPrint o(out); 
+      o.printBegin("", " ", NULL, ind); 
+      o.print("<"); o.print(s); o.print(">"); 
+      o.printEnd(); 
+    }
+  }
+
+  /*-------------------*/
+  void end() {
+    if (out.getLevel() == 0) return; 
+
+    newline(); 
+  }
+
+  /*-------------------*/
+  void newline() 
+  {
+    if (out.isNull()) return; 
+    AzPrint::writeln(out, ""); 
+  }
+
+  /*-------------------*/
+  void item_noquotes(const char *kw, const char *desc) {
+    AzBytArr s_dflt; 
+    _item(false, kw, desc, s_dflt, true);  
+  }
+
+  /*-------------------*/
+  void item_required_lvl(const char *kw, const char *desc, int lvl) {
+    if (out.getLevel() < lvl) return; 
+    _item(true, kw, desc); 
+  }
+
+  /*-------------------*/
+  void item_experimental(const char *kw, const char *desc, int dflt) {
+    if (out.getLevel() == 0) return; 
+    item(kw, desc, dflt); 
+  }
+  void item_experimental(const char *kw, const char *desc, double dflt) {
+    if (out.getLevel() == 0) return; 
+    item(kw, desc, dflt); 
+  }
+  void item_experimental(const char *kw, const char *desc, const char *dflt=NULL) {
+    if (out.getLevel() == 0) return; 
+    item(kw, desc, dflt); 
+  }
+
+  /*-------------------*/
+  void item(const char *kw, const char *desc, int dflt) {
+    _item(false, kw, desc, dflt); 
+  }
+  void item(const char *kw, const char *desc, double dflt) {
+    _item(false, kw, desc, dflt); 
+  }
+  void item(const char *kw, const char *desc, const char *dflt=NULL) {
+    _item(false, kw, desc, dflt); 
+  }
+
+  /*-------------------*/
+  void item_required(const char *kw, const char *desc, int dflt) {
+    _item(true, kw, desc, dflt); 
+  }
+  void item_required(const char *kw, const char *desc, double dflt) {
+    _item(true, kw, desc, dflt); 
+  }
+  void item_required(const char *kw, const char *desc, const char *dflt=NULL) {
+    _item(true, kw, desc, dflt); 
+  }
+
+  /*-------------------*/
+  void pitem(const char *name, const char *desc) {
+    AzPrint::write(out, "    "); 
+    AzPrint::write(out, name); 
+    AzPrint::write(out, ": "); 
+    AzPrint::writeln(out, desc); 
+  }
+
+  template <class T>
+  void writeln(const T inp) {
+    if (out.isNull()) return; 
+    AzPrint::writeln(out, inp); 
+  }
+  template <class T, class U>
+  void writeln(const T inp0, const U inp1) {
+    if (out.isNull()) return; 
+    AzPrint::writeln(out, inp0, inp1); 
+  }
+  void writeln_desc(const char *desc) {
+    writeln(desc, ind+kw_width+1); 
+  }
+  void writeln_header_experimental(const char *txt) {
+    if (out.getLevel() == 0) return; 
+    writeln_header(txt); 
+  }
+  void writeln_header(const char *txt) {
+    writeln(txt, ind); 
+  }
+  void writeln(const char *txt, int ind_len) {
+    if (out.isNull()) return; 
+    AzBytArr s(txt); 
+    _multi_lines(&s, ind_len);  
+    AzBytArr s_ind; s_ind.fill(' ', ind_len); 
+    AzPrint::writeln(out, s_ind, s); 
+  }
+  void nl() {
+    if (out.isNull()) return; 
+    AzPrint::writeln(out, ""); 
+  }
+
+protected:
+  /*-------------------*/
+  void _item(bool isRequired, 
+             const char *kw, const char *desc, 
+             int dflt) 
+  {
+    AzBytArr s(" (Default:"); s.cn(dflt); s.c(")"); 
+    _item(isRequired, kw, desc, s); 
+  }
+  void _item(bool isRequired, 
+             const char *kw, const char *desc, 
+             double dflt) 
+  {
+    AzBytArr s(" (Default:"); s.cn(dflt); s.c(")"); 
+    _item(isRequired, kw, desc, s); 
+  }
+  void _item(bool isRequired, 
+             const char *kw, const char *desc, 
+             const char *dflt=NULL) 
+  {
+    AzBytArr s; 
+    if (dflt != NULL && strlen(dflt) > 0) {
+      s.c(" (Default:"); s.c(dflt); s.c(")"); 
+    }
+    _item(isRequired, kw, desc, s); 
+  }
+
+  /*-------------------*/
+  void _item(bool isRequired, 
+             const char *kw, const char *desc, 
+             const AzBytArr &s_dflt, 
+             bool no_quotes=false)
+  {
+    if (out.isNull()) return; 
+    int indent = ind; 
+    if (isRequired) indent-=2; 
+    AzPrint o(out); 
+    o.printBegin("", " ", "", indent); 
+    if (isRequired) o.print("*"); 
+
+    AzBytArr s_kw; 
+    if (no_quotes) s_kw.concat(kw); 
+    else           s_kw.inQuotes(kw, "\""); 
+    int len = kw_width - s_kw.length(); 
+    if (len > 0) {
+      AzBytArr s_fill; 
+      s_fill.fill(' ', len); 
+      s_kw.concat(&s_fill); 
+    }
+    AzBytArr s_desc(desc); 
+    s_desc.concat(&s_dflt);    
+    _multi_lines(&s_desc, ind+kw_width+1);  
+
+    o.print(s_kw); 
+    if (len >= 0) {
+      o.print(s_desc); 
+    }
+    else {
+      o.printEnd(); 
+      o.printBegin("", "", "", ind+kw_width+1); 
+      o.print(s_desc); 
+    }
+    o.printEnd();   
+  }
+
+  static void _multi_lines(AzBytArr *s, /* inout */
+                           int indent) {
+    AzBytArr s_txt(s);  
+    s->reset(); 
+    int width = line_width - indent; 
+    const AzByte *txt = s_txt.point(); 
+    int txt_len = s_txt.length(); 
+    int offs; 
+    for (offs = 0; offs < txt_len; ) {
+      int next_offs = MIN(offs + width, txt_len); 
+
+      if (next_offs < txt_len && 
+          txt[next_offs] != ' ') {
+        int oo; 
+        for (oo = next_offs-1; oo >= offs; --oo) {
+          if (txt[oo] == ' ') break; 
+        }
+        if (oo > offs) next_offs = oo; 
+      }
+
+      s->concat(txt + offs, next_offs - offs); 
+      offs = next_offs; 
+
+      for ( ; offs < txt_len; ++offs) {
+        if (txt[offs] != ' ') break; 
+      }
+      if (offs < txt_len) 
