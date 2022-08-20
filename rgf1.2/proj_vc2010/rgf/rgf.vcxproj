@@ -154,4 +154,15 @@
     <ClCompile Include="..\..\src\com\AzTaskTools.cpp" />
     <ClCompile Include="..\..\src\tet\AzTETmain.cpp" />
     <ClCompile Include="..\..\src\tet\AzTETproc.cpp" />
-    <ClCompile Includ
+    <ClCompile Include="..\..\src\com\AzTools.cpp" />
+    <ClCompile Include="..\..\src\tet\AzTree.cpp" />
+    <ClCompile Include="..\..\src\tet\AzTreeEnsemble.cpp" />
+    <ClCompile Include="..\..\src\tet\AzTrTree.cpp" />
+    <ClCompile Include="..\..\src\tet\AzTrTreeFeat.cpp" />
+    <ClCompile Include="..\..\src\com\AzUtil.cpp" />
+    <ClCompile Include="..\..\src\tet\driv_rgf.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
