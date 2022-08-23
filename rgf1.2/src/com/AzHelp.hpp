@@ -284,4 +284,14 @@ protected:
       for ( ; offs < txt_len; ++offs) {
         if (txt[offs] != ' ') break; 
       }
-      if (offs < txt_len) 
+      if (offs < txt_len) {
+        s->nl(); 
+        AzBytArr s_fill; 
+        s_fill.fill(' ', indent); 
+        s->concat(&s_fill); 
+      }
+    }
+  }
+}; 
+#endif 
+
