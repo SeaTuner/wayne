@@ -115,4 +115,53 @@ void AzParam::concat(const AzByte *inp, int len,
       if (*wp > 0x20) break; /* remove blank at the beginning */
     }
     linep = wp; 
-    for (wp
+    for (wp = linep; wp < line_end; ++wp) {
+      if (*wp == cmt || *wp <= 0x20) break; 
+    }
+    if (wp - linep > 0) {
+      if (s_out->length() > 0) {
+        s_out->concat(dlm); 
+      }
+      s_out->concat(linep, (int)(wp-linep)); 
+    }    
+    linep = line_end+1; /* +1 for \n */
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzParam::read(const char *fn, 
+                   AzBytArr *s_out, 
+                   AzByte dlm, 
+                   AzByte cmt)
+{
+  AzFile file(fn); 
+  file.open("rb"); 
+  int len = file.size_under2G("AzParam::read, parameter file"); 
+  AzBytArr ba_buff; 
+  AzByte *buff = ba_buff.reset(len, 0); 
+  file.seekReadBytes(0, len, buff); 
+  file.close(); 
+  concat(buff, len, s_out, dlm, cmt); 
+}                   
+
+/*-------------------------------------------------------------*/
+void AzParam::concat_args(int argc, 
+                          const char *argv[], 
+                          AzBytArr *s_out, /* output */ 
+                          char file_mark, 
+                          char dlm, 
+                          char cmt)
+{
+  s_out->reset(); 
+  int ax; 
+  for (ax = 0; ax < argc; ++ax) {
+    if (*argv[ax] == file_mark) {
+      const char *fn = argv[ax]+1; 
+      AzParam::read(fn, s_out, dlm, cmt); 
+    }
+    else {
+      if (s_out->length() > 0) s_out->c(dlm); 
+      s_out->c(argv[ax]); 
+    }
+  }
+}                          
