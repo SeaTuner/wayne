@@ -145,4 +145,202 @@ public:
     if (o == NULL) return; 
     if (str != NULL) *o<<str; 
     *o<<endl; 
-   
+    if (dlm == NULL) {
+      o->flush(); 
+    }
+  }
+  inline void flush() {
+    if (o == NULL) return; 
+    o->flush(); 
+  }
+
+  /*-------------------*/
+  inline void reset_options() {
+    if (o == NULL) return; 
+    o->unsetf(ios_base::scientific); 
+    o->unsetf(ios_base::fixed); 
+    o->precision(3); 
+  }
+  inline void set_precision(int p) {
+    if (o == NULL) return; 
+    o->precision(p); 
+  }
+  inline void set_scientific() {
+    if (o == NULL) return; 
+    *o<<scientific; 
+  }
+
+  /*-------------------*/
+  inline void print(const AzBytArr &s) {
+    if (o == NULL) return; 
+    print(s.c_str()); 
+  }
+  inline void print(const char *str) {
+    if (o == NULL) return; 
+    itemBegin(); 
+    *o<<str; 
+  }
+
+  /*---  print continuously without delimiter  ---*/
+  inline void print_cont(const char *s1, const char *s2, const char *s3=NULL) {
+    if (o == NULL) return; 
+    itemBegin(); 
+    if (s1 != NULL) *o<<s1; 
+    if (s2 != NULL) *o<<s2; 
+    if (s3 != NULL) *o<<s3; 
+  }
+
+  /*-----*/
+  inline void print(int val, int width=-1, bool doFillZero=false) {
+    print(NULL, val, width, doFillZero); 
+  }
+  inline void print(AZint8 val, int width=-1, bool doFillZero=false) {
+    print(NULL, val, width, doFillZero); 
+  }
+  inline void print(double val, int prec=-1, bool doSci=false) {
+    print(NULL, val, prec, doSci); 
+  }
+  template <class T>
+  inline void print(const char *name, T val, int width_prec=-1, 
+                    bool doZero_doSci=false) {
+    if (o == NULL) return; 
+    itemBegin(); 
+    if (name != NULL) {
+      *o<<name; 
+      if (name_dlm != NULL) *o<<name_dlm; 
+    }
+    AzBytArr s; s.cn(val, width_prec, doZero_doSci);
+    *o<<s.c_str(); 
+  }
+
+  /*-----*/
+  inline void inParen(int val, int width=-1, bool doFillZero=false) {
+    if (o == NULL) return; 
+    itemBegin(); 
+    AzBytArr s; inParen(&s, val, width, doFillZero); 
+    *o<<s.c_str(); 
+  }
+  inline void inBrackets(int val, int width=-1, bool doFillZero=false) {
+    if (o == NULL) return; 
+    itemBegin(); 
+    AzBytArr s; inBrackets(&s, val, width, doFillZero); 
+    *o<<s.c_str(); 
+  }
+  inline void inParen(double val, int prec=-1, bool doSci=false) {
+    if (o == NULL) return; 
+    itemBegin(); 
+    AzBytArr s; inParen(&s, val, prec, doSci); 
+    *o<<s.c_str(); 
+  }
+  inline void inBrackets(double val, int prec=-1, bool doSci=false) {
+    if (o == NULL) return; 
+    itemBegin(); 
+    AzBytArr s; inBrackets(&s, val, prec, doSci); 
+    *o<<s.c_str(); 
+  }
+  inline void inDoubleQuotes(const char *str) {
+    if (o == NULL) return; 
+    itemBegin(); 
+    *o<<"\""<<str<<"\""; 
+  }
+  inline void inParen(const char *str) {
+    if (o == NULL) return; 
+    itemBegin(); 
+    *o<<"("<<str<<")"; 
+  }
+  inline void inBrackets(const char *str) {
+    if (o == NULL) return; 
+    itemBegin(); 
+    *o<<"["<<str<<"]"; 
+  }
+  inline void inParen(const AzBytArr &s) {
+    if (o == NULL) return; 
+    inParen(s.c_str()); 
+  }
+  inline void inBrackets(const AzBytArr &s) {
+    if (o == NULL) return; 
+    inBrackets(s.c_str()); 
+  }
+
+  /*---  ---*/
+  template <class T, class U>
+  inline void pair_inParen(T val1, U val2, const char *pair_dlm=NULL) { 
+    if (o == NULL) return; 
+    itemBegin(); 
+    _print_pair("(", ")", val1, val2, pair_dlm); 
+  }
+
+  template <class T, class U>
+  inline void pair_inBrackets(T val1, U val2, const char *pair_dlm=NULL) {
+    if (o == NULL) return; 
+    itemBegin(); 
+    _print_pair("[", "]", val1, val2, pair_dlm);  
+  }
+
+  /*-------------------*/
+  inline void newLine() {
+    if (o == NULL) return; 
+    *o<<endl; 
+  }
+  template <class T>
+  inline void writeln(const T inp) {
+    if (o == NULL) return; 
+    *o<<inp<<endl; 
+  }
+  template <class T>
+  inline void write(const T inp) {
+    if (o == NULL) return; 
+    *o<<inp; 
+  }
+  inline void writeln(const AzBytArr &s) {
+    if (o == NULL) return; 
+    *o<<s.c_str()<<endl; 
+  }
+  inline void write(const AzBytArr &s) {
+    if (o == NULL) return; 
+    *o<<s.c_str(); 
+  }
+
+  inline void disableDlm() {
+    useDlm = false; 
+  }
+  inline void enableDlm() {
+    useDlm = true; 
+  }
+
+  template <class T>
+  static inline void write(const AzOut &out, const T inp) {
+    if (out.isNull()) return; 
+    *out.o<<inp; 
+  }
+  template <class T>
+  static inline void writeln(const AzOut &out, const T inp) {
+    if (out.isNull()) return; 
+    *out.o<<inp<<endl; 
+  }
+  template <class T, class U>
+  static inline void writeln(const AzOut &out, const T inp0, const U inp1) {
+    write(out, inp0); 
+    writeln(out, inp1); 
+  }
+  template <class T, class U, class V>
+  static inline void writeln(const AzOut &out, const T inp0, const U inp1, const V inp2) {
+    write(out, inp0); write(out, inp1); writeln(out, inp2); 
+  }
+  template <class T, class U, class V, class W>
+  static inline void writeln(const AzOut &out, const T inp0, const U inp1, const V inp2, const W inp3) {
+    write(out, inp0); write(out, inp1); write(out, inp2); writeln(out, inp3); 
+  }
+  
+  static inline void write(const AzOut &out, const AzBytArr &s) {
+    write(out, s.c_str()); 
+  }
+  static inline void writeln(const AzOut &out, const AzBytArr &s) {
+    writeln(out, s.c_str()); 
+  }
+  template <class T>
+  static inline void force_writeln(const T inp) {
+    cout<<inp<<endl; 
+  }
+  static inline void force_writeln(const AzBytArr &s) {
+    force_write
