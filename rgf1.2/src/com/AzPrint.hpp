@@ -343,4 +343,46 @@ public:
     cout<<inp<<endl; 
   }
   static inline void force_writeln(const AzBytArr &s) {
-    force_write
+    force_writeln(s.c_str()); 
+  }
+
+  inline void print_space(int len) {
+    AzBytArr s; s.fill(' ', len); 
+    print(s); 
+  }
+
+protected:
+  inline void itemBegin() {
+    if (o == NULL) return; 
+    if (useDlm) {
+      if (dlm == NULL)    *o<<endl<<"   ";  
+      else if (count > 0) *o<<dlm; 
+    }
+    ++count; 
+  }
+
+  /*-------------------*/
+  template <class T, class U>
+  inline void _print_pair(const char *left, const char *right, 
+                          T val1, U val2, const char *pair_dlm) {
+    if (o == NULL) return; 
+    *o<<left<<val1; 
+    if (pair_dlm != NULL) *o<<pair_dlm; 
+    else if (dlm != NULL) *o<<dlm; 
+    else                  *o<<" "; 
+    *o<<val2<<right; 
+  }
+
+  /*-------------------*/
+  template <class T>
+  inline static void inParen(AzBytArr *s, T val, int width_prec=-1, 
+                             bool doZero_doSci=false) {
+    s->c("("); s->cn(val, width_prec, doZero_doSci); s->c(")"); 
+  }
+  template <class T>
+  inline static void inBrackets(AzBytArr *s, T val, int width_prec=-1, 
+                                bool doZero_doSci=false) {
+    s->c("["); s->cn(val, width_prec, doZero_doSci); s->c("]"); 
+  }
+}; 
+#endif 
