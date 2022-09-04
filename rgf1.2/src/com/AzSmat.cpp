@@ -129,4 +129,204 @@ void AzSmat::set(const AzReadOnlyMatrix *inp)
 /*-------------------------------------------------------------*/
 void AzSmat::set(const AzSmat *inp)  
 {
-  if (inp->row_num != this->row_num ||
+  if (inp->row_num != this->row_num || 
+      inp->col_num != this->col_num) {
+    reform(inp->row_num, inp->col_num); 
+  }
+  int cx; 
+  for (cx = 0; cx < this->col_num; ++cx) {
+    if (inp->column[cx] == NULL) {
+      delete column[cx]; 
+      column[cx] = NULL; 
+    }
+    else {
+      if (column[cx] == NULL) {
+        column[cx] = new AzSvect(row_num); 
+      }
+      column[cx]->set(inp->column[cx]); 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::set(const AzSmat *inp, int col0, int col1)  
+{
+  if (col0 < 0 || col1 < 0 || col1 > inp->col_num || col0 >= col1) {
+    throw new AzException("AzSmat::set(inp,col0,col1)", "out of range"); 
+  }
+  if (inp->row_num != this->row_num || 
+      inp->col_num != col1-col0) {
+    reform(inp->row_num, col1-col0); 
+  }
+  int cx; 
+  for (cx = col0; cx < col1; ++cx) {
+    int my_cx = cx - col0; 
+    if (inp->column[cx] == NULL) {
+      delete column[my_cx]; 
+      column[my_cx] = NULL; 
+    }
+    else {
+      if (column[my_cx] == NULL) {
+        column[my_cx] = new AzSvect(row_num); 
+      }
+      column[my_cx]->set(inp->column[cx]); 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+int AzSmat::set(const AzSmat *inp, const int *cols, int cnum,  /* new2old */
+                bool do_zero_negaindex) 
+{
+  if (row_num != inp->row_num || col_num != cnum) {
+    reform(inp->row_num, cnum); 
+  }
+  int negaindex = 0; 
+  int my_col; 
+  for (my_col = 0; my_col < cnum; ++my_col) {
+    int col = cols[my_col]; 
+    if (col < 0 && do_zero_negaindex) {
+      delete column[my_col]; 
+      column[my_col] = NULL;     
+      ++negaindex; 
+      continue; 
+    }   
+    if (col < 0 || col >= inp->col_num) {
+      throw new AzException("AzSmat::set(inp,cols,cnum)", "invalid col#"); 
+    }
+    if (inp->column[col] == NULL) {
+      delete column[my_col]; 
+      column[my_col] = NULL; 
+    }
+    else {
+      if (column[my_col] == NULL) {
+        column[my_col] = new AzSvect(row_num); 
+      }
+      column[my_col]->set(inp->column[col]); 
+    }
+  }
+  return negaindex; 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::set(int col0, int col1, const AzSmat *inp, int i_col0)
+{
+  const char *eyec = "AzSmat::set(col0,col1,inp)"; 
+  if (col0 < 0 || col1-col0 <= 0 || col1 > col_num) {
+    throw new AzException(eyec, "requested columns are out of range"); 
+  }
+  int i_col1 = i_col0 + (col1-col0); 
+  if (i_col0 < 0 || i_col1 > inp->col_num) {
+    throw new AzException(eyec, "requested columns are out of range in the input matrix"); 
+  }
+  if (row_num != inp->row_num) {
+    throw new AzException(eyec, "#rows mismatch"); 
+  }
+  int i_col = i_col0; 
+  int col; 
+  for (col = col0; col < col1; ++col, ++i_col) {
+    if (inp->column[i_col] == NULL) {
+      delete column[col]; column[col] = NULL; 
+    }
+    else {
+      if (column[col] == NULL) {
+        column[col] = new AzSvect(row_num); 
+      }
+      column[col]->set(inp->column[i_col]);       
+    }
+  }
+}             
+                
+/*-------------------------------------------------------------*/
+void AzSmat::reduce(const int *cols, int cnum)  /* new2old; must be sorted */
+{
+  if (column == NULL) {
+    reform(row_num, cnum); 
+    return; 
+  }
+
+  int negaindex = 0; 
+  int new_col; 
+  for (new_col = 0; new_col < cnum; ++new_col) {
+    int old_col = cols[new_col]; 
+    if (old_col < 0 || old_col >= col_num) {
+      throw new AzException("AzSmat::reduce(cols,cnum)", "invalid col#"); 
+    }
+    if (new_col > 0 && old_col <= cols[new_col-1]) {
+      throw new AzException("AzSmat::reduce(cols,cnum)", "column# must be sorted"); 
+    }
+    
+    if (old_col == new_col) {}
+    else if (column[old_col] == NULL) {
+      delete column[new_col]; 
+      column[new_col] = NULL; 
+    }
+    else {
+      if (column[new_col] == NULL) {
+        column[new_col] = new AzSvect(row_num); 
+      }
+      column[new_col]->set(column[old_col]); 
+    }
+  }
+  resize(cnum); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::transpose(AzSmat *m_out, 
+                       int col_begin, int col_end) const
+{
+  int col_b = col_begin, col_e = col_end; 
+  if (col_b < 0) {
+    col_b = 0; 
+    col_e = col_num; 
+  }
+  else {
+    if (col_b >= col_num || 
+        col_e < 0 || col_e > col_num || 
+        col_e - col_b <= 0) {
+      throw new AzException("AzSmat::transpose", "column range error"); 
+    }
+  }
+
+  _transpose(m_out, col_b, col_e); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::_transpose(AzSmat *m_out, 
+                        int col_begin, 
+                        int col_end) const
+{
+  int row_num = rowNum(); 
+
+  m_out->reform(col_end - col_begin, row_num); 
+
+  AzIntArr ia_row_count; 
+  ia_row_count.reset(row_num, 0); 
+  int *row_count = ia_row_count.point_u(); 
+
+  int cx; 
+  for (cx = col_begin; cx < col_end; ++cx) {
+    /* rewind(cx); */
+    AzCursor cursor; 
+    for ( ; ; ) {
+      double val; 
+      int rx = next(cursor, cx, val); 
+      if (rx < 0) break;
+
+      ++row_count[rx]; 
+    }
+  }
+  int rx; 
+  for (rx = 0; rx < row_num; ++rx) {
+    if (row_count[rx] > 0) {
+      m_out->col_u(rx)->clear_prepare(row_count[rx]); 
+    }
+  }
+
+  for (cx = col_begin; cx < col_end; ++cx) {
+    /* rewind(cx); */
+    AzCursor cursor; 
+    for ( ; ; ) {
+      double val; 
+      int rx = next(cursor, cx, val); 
+      if (rx 
