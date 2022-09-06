@@ -551,4 +551,218 @@ void AzSmat::dump(const AzOut &out, const char *header,
 
   AzPrint o(out); 
 
-  const char *my_he
+  const char *my_header = ""; 
+  if (header != NULL) my_header = header; 
+  o.printBegin(my_header, ",", "="); 
+  /* (row,col)\n */
+  o.pair_inBrackets(row_num, col_num, ","); 
+  o.printEnd(); 
+
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) {
+    if (column[cx] == NULL) {
+      continue; 
+    }
+
+    /* column=cx (col_header) */
+    o.printBegin("", " ", "="); 
+    o.print("column", cx); 
+    if (sp_col != NULL) {
+      o.inParen(sp_col->c_str(cx)); 
+    }
+    o.printEnd(); 
+    column[cx]->dump(out, "", sp_row, cut_num); 
+  }
+  o.flush(); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::normalize() 
+{
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) {
+    if (column[cx] != NULL) {  
+      column[cx]->normalize(); 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::normalize1() 
+{
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) {
+    if (column[cx] != NULL) {
+      column[cx]->normalize1(); 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::clear() 
+{
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) {
+    if (column[cx] != NULL) {
+      delete column[cx]; 
+      column[cx] = NULL; 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+int AzSmat::next(AzCursor &cursor, int col, double &out_val) const
+{
+  if (col < 0 || col >= col_num) {
+    throw new AzException("AzSmat::next", "col# is out of range"); 
+  }
+  if (column[col] == NULL) {
+    out_val = 0; 
+    return AzNone; 
+  }
+  return column[col]->next(cursor, out_val); 
+}
+
+/*-------------------------------------------------------------*/
+/*-------------------------------------------------------------*/
+/*-------------------------------------------------------------*/
+void AzSvect::reform(int inp_row_num, bool asDense) 
+{
+  _release(); 
+  initialize(inp_row_num, asDense); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::initialize(int inp_row_num, bool asDense) 
+{
+  const char *eyec = "AzSvect::initialize"; 
+  if (inp_row_num < 0) {
+    throw new AzException(eyec, "#row must be non-negative"); 
+  }
+  if (elm != NULL || elm_num > 0) {
+    throw new AzException(eyec, "occupied"); 
+  }
+  row_num = inp_row_num; 
+  if (asDense) {
+    a.alloc(&elm, row_num, eyec, "elm"); 
+    elm_num = row_num; 
+    int ex; 
+    for (ex = 0; ex < elm_num; ++ex) {
+      elm[ex].no = ex; 
+      elm[ex].val = 0; 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::set(const AzSvect *vect1, double coefficient) 
+{
+  if (vect1 == NULL) {
+    throw new AzException("AzSvect::set(Svect)", "null pointer"); 
+  }
+  if (row_num != vect1->row_num) {
+    reform(vect1->row_num); 
+  }
+  clear_prepare(vect1->nonZeroRowNum()); 
+
+  AzCursor cursor; 
+  for ( ; ; ) {
+    double val; 
+    int rx = vect1->next(cursor, val); 
+    if (rx < 0) break; 
+    if (coefficient != 1) val *= coefficient; 
+    set_inOrder(rx, val); 
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::set(const AzReadOnlyVector *inp, double coefficient) 
+{
+  if (inp == NULL) {
+    throw new AzException("AzSvect::set(readonly)", "null pointer"); 
+  }
+  if (row_num != inp->rowNum()) {
+    reform(inp->rowNum()); 
+  }
+  clear_prepare(inp->nonZeroRowNum()); 
+
+  /* inp->rewind(); */
+  AzCursor cursor; 
+  for ( ; ; ) {
+    double val; 
+    int row = inp->next(cursor, val); 
+    if (row < 0) break; 
+    set_inOrder(row, val); 
+  }
+  if (coefficient != 1) multiply(coefficient); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::_read(AzFile *file) 
+{
+  const char *eyec = "AzSvect::_read(file)"; 
+  if (elm != NULL) {
+    throw new AzException(eyec, "occupied"); 
+  }
+  row_num = file->readInt(); 
+  elm_num = file->readInt(); 
+
+  a.alloc(&elm, elm_num, eyec, "elm"); 
+
+  file->seekReadBytes(-1, sizeof(elm[0])*elm_num, elm); 
+  _swap(); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::_swap()
+{
+  if (!isSwapNeeded) {
+    return; 
+  }
+
+  AZI_VECT_ELM dummy; 
+  if (sizeof(dummy.val) != sizeof(double)) {
+    throw new AzException("AzSvect::_swap", "value is not double?!"); 
+  }
+
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    AZI_VECT_ELM *ep = &elm[ex];  
+    AzFile::swap_int4(&ep->no); 
+    AzFile::swap_double(&ep->val); 
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::write(AzFile *file) 
+{
+  file->writeInt(row_num); 
+  file->writeInt(elm_num); 
+
+  _swap(); 
+  file->writeBytes(elm, sizeof(elm[0])*elm_num); 
+  _swap(); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::filter(const AzIntArr *ia_sorted, /* filter: must be sorted */
+                     /*---  output  ---*/
+                     AzIFarr *ifa_nonzero, 
+                     AzIntArr *ia_zero)
+const
+{
+  int idx_num; 
+  const int *idx = ia_sorted->point(&idx_num); 
+  if (idx_num <= 0) return; 
+
+  int ex = 0; 
+  int xx; 
+  for (xx = 0; xx < idx_num; ++xx) {
+    if (xx > 0 && idx[xx] < idx[xx-1]) {
+      throw new AzException("AzSvect::filter", "filter must be sorted"); 
+    }
+    for ( ; ex < elm_num; ++ex) {
+      if (elm[ex].no == idx[xx]) {
+        if (elm[ex].val != 0) {
+          if (ifa_nonzero != NULL) {
+            ifa_nonzero->put(elm[ex].no, elm[ex].val); 
