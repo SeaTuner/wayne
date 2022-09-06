@@ -329,4 +329,226 @@ void AzSmat::_transpose(AzSmat *m_out,
     for ( ; ; ) {
       double val; 
       int rx = next(cursor, cx, val); 
-      if (rx 
+      if (rx < 0) break;
+
+      m_out->col_u(rx)->set_inOrder(cx - col_begin, val); 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::clear_prepare(int num)
+{
+  if (num > row_num) {
+    throw new AzException("AzSvect::prepare", "input is too large"); 
+  }  
+  clear(); 
+
+  elm_num = 0; 
+
+  if (num > 0) {
+    int elm_num_max = num; 
+    a.alloc(&elm, elm_num_max, "AzSvect::prepare", "elm"); 
+  }  
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::_read(AzFile *file) 
+{
+  const char *eyec = "AzSmat::_read(file)"; 
+  if (col_num > 0 || column != NULL) {
+    throw new AzException(eyec, "occupied"); 
+  }
+  col_num = file->readInt(); 
+  row_num = file->readInt(); 
+  if (col_num > 0) {
+    a.alloc(&column, col_num, eyec, "column"); 
+    int cx; 
+    for (cx = 0; cx < col_num; ++cx) {
+      column[cx] = AzObjIOTools::read<AzSvect>(file); 
+    }
+  }
+  dummy_zero.reform(row_num); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::write(AzFile *file) 
+{
+  file->writeInt(col_num); 
+  file->writeInt(row_num); 
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) {
+    AzObjIOTools::write(column[cx], file); 
+  }
+}
+
+/*-------------------------------------------------------------*/
+bool AzSmat::isZero() const
+{
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) {
+    if (column[cx] != NULL && 
+        !column[cx]->isZero()) {
+      return false; 
+    }
+  }
+  return true; 
+}
+
+/*-------------------------------------------------------------*/
+bool AzSmat::isZero(int col_no) const
+{
+  if (col_no < 0 || col_no >= col_num || 
+      column[col_no] == NULL) {
+    return true; 
+  }
+  return column[col_no]->isZero();
+}
+
+/*-------------------------------------------------------------*/
+double AzSmat::max(int *out_row, int *out_col, 
+                   bool ignoreZero) const
+{
+  int max_row = -1, max_col = -1; 
+  double max_val = 0; 
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) {
+    double local_max = 0; 
+    int local_rx = -1; 
+    if (column[cx] == NULL) {
+      if (!ignoreZero) {
+        local_max = 0; 
+        local_rx = 0; 
+      }
+    }
+    else {
+      local_max = column[cx]->max(&local_rx, ignoreZero); 
+    }
+    if (local_rx >= 0) {
+      if (max_col < 0 || local_max > max_val) {
+        max_col = cx; 
+        max_row = local_rx; 
+        max_val = local_max; 
+      }
+    }
+  }
+  if (out_row != NULL) {
+    *out_row = max_row; 
+  }
+  if (out_col != NULL) {
+    *out_col = max_col; 
+  }
+  return max_val; 
+}
+
+/*-------------------------------------------------------------*/
+double AzSmat::min(int *out_row, int *out_col, 
+                   bool ignoreZero) const
+{
+  int min_row = -1, min_col = -1; 
+  double min_val = 0; 
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) {
+    double local_min = 0; 
+    int local_rx = -1; 
+    if (column[cx] == NULL) {
+      if (!ignoreZero) {
+        local_min = 0; 
+        local_rx = 0; 
+      }
+    }
+    else {
+      local_min = column[cx]->min(&local_rx, ignoreZero); 
+    }
+    if (local_rx >= 0) {
+      if (min_col < 0 || local_min < min_val) {
+        min_col = cx; 
+        min_row = local_rx; 
+        min_val = local_min; 
+      }
+    }
+  }
+  if (out_row != NULL) {
+    *out_row = min_row; 
+  }
+  if (out_col != NULL) {
+    *out_col = min_col; 
+  }
+  return min_val; 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::set(int row_no, int col_no, double val) 
+{
+  const char *eyec = "AzSmat::set (row, col, val)"; 
+  if (col_no < 0 || col_no >= col_num) {
+    throw new AzException(eyec, "col# is out of range"); 
+  }
+  if (column[col_no] == NULL) {
+    column[col_no] = new AzSvect(row_num); 
+  }
+  column[col_no]->set(row_no, val); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::add(int row_no, int col_no, double val) 
+{
+  const char *eyec = "AzSmat::add"; 
+  if (col_no < 0 || col_no >= col_num) {
+    throw new AzException(eyec, "col# is out of range"); 
+  }
+  if (val == 0) return; 
+  if (column[col_no] == NULL) {
+    column[col_no] = new AzSvect(row_num); 
+  }
+  column[col_no]->add(row_no, val); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::multiply(int row_no, int col_no, double val) 
+{
+  const char *eyec = "AzSmat::multiply (row, col, val)"; 
+  if (col_no < 0 || col_no >= col_num) {
+    throw new AzException(eyec, "col# is out of range"); 
+  }
+  if (column[col_no] == NULL) {
+    return; 
+  }
+  column[col_no]->multiply(row_no, val); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::multiply(double val) 
+{
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) {
+    if (column[cx] != NULL) {
+      column[cx]->multiply(val); 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+double AzSmat::get(int row_no, int col_no) const
+{
+  const char *eyec = "AzSmat::get"; 
+  if (col_no < 0 || col_no >= col_num) {
+    throw new AzException(eyec, "col# is out of range"); 
+  }
+  if (column[col_no] == NULL) {
+    return 0; 
+  }
+  return column[col_no]->get(row_no); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::dump(const AzOut &out, const char *header, 
+                  const AzStrArray *sp_row, 
+                  const AzStrArray *sp_col, 
+                  int cut_num) const
+{
+  if (out.isNull()) return; 
+
+  AzPrint o(out); 
+
+  const char *my_he
