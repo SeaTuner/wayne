@@ -766,3 +766,232 @@ const
         if (elm[ex].val != 0) {
           if (ifa_nonzero != NULL) {
             ifa_nonzero->put(elm[ex].no, elm[ex].val); 
+          }
+        }
+        else {
+          if (ia_zero != NULL) {
+            ia_zero->put(elm[ex].no); 
+          }
+        }
+        break; 
+      }
+      else if (elm[ex].no > idx[xx]) {
+        if (ia_zero != NULL) {
+          ia_zero->put(idx[xx]); 
+        }
+        break; 
+      }
+    }
+    if (ex >= elm_num) {
+      if (ia_zero == NULL) break; 
+      ia_zero->put(idx[xx]); 
+    }
+  }    
+}
+
+/* !!!!! Assuming there is no duplicated data index */
+/*-------------------------------------------------------------*/
+void AzSvect::nonZero(AzIFarr *ifa, 
+                      const AzIntArr *ia_sorted) /* filter: must be sorted */
+const
+{
+  int idx_num; 
+  const int *idx = ia_sorted->point(&idx_num); 
+  if (idx_num <= 0) return; 
+  int xx = 0; 
+
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val != 0) {
+      for ( ; xx < idx_num; ++xx) {
+        if (xx > 0 && idx[xx] <= idx[xx-1]) {
+          throw new AzException("AzSvect::nonZero", "filter must be sorted"); 
+        }
+        if (idx[xx] == elm[ex].no) {
+          ifa->put(elm[ex].no, elm[ex].val); 
+          ++xx; 
+          break; 
+        }
+        else if (idx[xx] > elm[ex].no) {
+          break; 
+        }
+      }
+      if (xx >= idx_num) {
+        break; 
+      }
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::nonZero(AzIFarr *ifa) const
+{
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val != 0) {
+      ifa->put(elm[ex].no, elm[ex].val); 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::all(AzIFarr *ifa) const
+{
+  ifa->prepare(row_num); 
+  int last_no = -1; 
+  int ex, rx; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    for (rx = last_no+1; rx < elm[ex].no; ++rx) ifa->put(rx, 0); 
+    ifa->put(elm[ex].no, elm[ex].val); 
+    last_no = elm[ex].no; 
+  }
+  for (rx = last_no+1; rx < row_num; ++rx) ifa->put(rx, 0);   
+  if (ifa->size() != row_num) {
+    throw new AzException("AzSvect::all", "something is wrong"); 
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::zeroRowNo(AzIntArr *ia) const
+{
+  ia->reset(); 
+  int last_no = -1; 
+  int ex, rx; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    for (rx = last_no+1; rx < elm[ex].no; ++rx) ia->put(rx); 
+    if (elm[ex].val == 0) {
+      ia->put(elm[ex].no); 
+    }
+    last_no = elm[ex].no; 
+  }
+  for (rx = last_no+1; rx < row_num; ++rx) ia->put(rx);   
+}
+
+/* returns the first one */
+/*-------------------------------------------------------------*/
+int AzSvect::nonZeroRowNo() const
+{
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val != 0) {
+      return elm[ex].no; 
+    }
+  }
+  return -1; 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::nonZeroRowNo(AzIntArr *intq) const
+{
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val != 0) {
+      intq->put(elm[ex].no); 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+int AzSmat::nonZeroRowNo(AzIntArr *ia_nzrows) const 
+{
+  ia_nzrows->reset(); 
+  if (column == NULL) return 0; 
+  int col; 
+  for (col = 0; col < col_num; ++col) {
+    if (column[col] != NULL) {
+      AzIntArr ia; column[col]->nonZeroRowNo(&ia); 
+      ia_nzrows->concat(&ia); 
+    }
+  }
+  int nz = ia_nzrows->size(); 
+  ia_nzrows->unique(); 
+  return nz; 
+}
+
+/*-------------------------------------------------------------*/
+int AzSvect::nonZeroRowNum() const
+{
+  int count = 0; 
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val != 0) {
+      ++count;  
+    }
+  }
+  return count; 
+}
+
+/*-------------------------------------------------------------*/
+bool AzSvect::isZero() const
+{
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val != 0) {
+      return false; 
+    }
+  }
+  return true; 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::log_of_plusone()
+{
+  if (column == NULL) return; 
+  int col; 
+  for (col = 0; col < col_num; ++col) {
+    if (column[col] != NULL) {
+      column[col]->log_of_plusone(); 
+    }
+  }
+}
+/*-------------------------------------------------------------*/
+void AzSvect::log_of_plusone()
+{
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val < 0) {
+      throw new AzException("AzSvect::log_of_plusone", "components must be non-negative"); 
+    }
+    else if (elm[ex].val > 0) {
+      elm[ex].val = log(elm[ex].val+1); 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+double AzSvect::max(int *out_row_no, 
+                    bool ignoreZero) const
+{
+  double max_val = -1; 
+  int max_row = -1; 
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (ignoreZero && elm[ex].val == 0) {
+      continue; 
+    }
+    if (max_row < 0 || elm[ex].val > max_val) {
+      max_val = elm[ex].val; 
+      max_row = elm[ex].no;  
+    }
+  }
+  if (!ignoreZero && max_val < 0 && elm_num < row_num) {
+    max_val = 0; 
+    for (ex = 0; ex < elm_num; ++ex) {
+      if (elm[ex].no != ex) break;
+    }
+    if (ex == 0) {
+      max_row = 0; 
+    }
+    else {
+      max_row = elm[ex - 1].no + 1; 
+    }
+  }
+  if (out_row_no != NULL) {
+    *out_row_no = max_row; 
+  }
+
+  if (max_row < 0 && ignoreZero) {
+    max_val = 0; 
+  }
+
+  return max_val
