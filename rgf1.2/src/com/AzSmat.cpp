@@ -994,4 +994,226 @@ double AzSvect::max(int *out_row_no,
     max_val = 0; 
   }
 
-  return max_val
+  return max_val; 
+}
+
+/*-------------------------------------------------------------*/
+double AzSvect::maxAbs(int *out_row_no, 
+                       double *out_real_val) const
+{
+  double real_val = -1, max_val = -1; 
+  int max_row = -1; 
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    double abs_val = fabs(elm[ex].val); 
+    if (max_row < 0 || abs_val > max_val) {
+      max_val = abs_val; 
+      max_row = elm[ex].no;  
+      real_val = elm[ex].val; 
+    }
+  }
+  if (max_row < 0) {
+    max_val = 0; 
+    max_row = 0; 
+    real_val = 0; 
+  }
+  if (out_row_no != NULL) {
+    *out_row_no = max_row; 
+  }
+  if (out_real_val != NULL) {
+    *out_real_val = real_val; 
+  }
+
+  return max_val; 
+}
+
+/*-------------------------------------------------------------*/
+double AzSvect::min(int *out_row_no, 
+                    bool ignoreZero) const
+{
+  double min_val = 1.0; 
+  int min_row = -1; 
+
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (ignoreZero && elm[ex].val == 0) {
+      continue; 
+    }
+
+    if (min_row < 0 || elm[ex].val < min_val) {
+      min_val = elm[ex].val; 
+      min_row = elm[ex].no;  
+    }
+  }
+  if (!ignoreZero && min_val > 0 && elm_num < row_num) {
+    min_val = 0; 
+    for (ex = 0; ex < elm_num; ++ex) {
+      if (elm[ex].no != ex) {
+        break;
+      }
+    }
+    if (ex == 0) {
+      min_row = 0; 
+    }
+    else {
+      min_row = elm[ex - 1].no + 1; 
+    }
+  }
+  if (out_row_no != NULL) {
+    *out_row_no = min_row; 
+  }
+
+  if (ignoreZero && min_row < 0) {
+    min_val = 0; 
+  }
+
+  return min_val; 
+}
+
+/*-------------------------------------------------------------*/
+double AzSvect::minPositive(int *out_row_no) const
+{
+  double min_val = 0; 
+  int min_row = -1; 
+
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val > 0) {
+      if (min_row < 0 || elm[ex].val < min_val) {
+        min_val = elm[ex].val; 
+        min_row = elm[ex].no;  
+      }
+    }
+  }
+
+  if (out_row_no != NULL) {
+    *out_row_no = min_row; 
+  }
+  return min_val; 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::set(int row_no, double val) 
+{
+  const char *eyec = "AzSvect::set"; 
+  if (row_no < 0 || row_no >= row_num) {
+    throw new AzException(eyec, "row# is out of range"); 
+  }
+  _checkVal(val); 
+
+  int where = to_insert(row_no); 
+  elm[where].val = (AZ_MTX_FLOAT)val; 
+}
+
+
+/*-------------------------------------------------------------*/
+void AzSmat::set(double val)
+{
+  if (val == 0) {
+    zeroOut(); 
+    return; 
+  }
+  int col; 
+  for (col = 0; col < col_num; ++col) {
+    if (column[col] == NULL) {
+      column[col] = new AzSvect(row_num); 
+    } 
+    column[col]->set(val); 
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::set(double val) 
+{
+  _checkVal(val); 
+
+  int rx; 
+  if (elm_num == row_num) {
+    for (rx = 0; rx < row_num; ++rx) {
+      elm[rx].no = rx; 
+      elm[rx].val = (AZ_MTX_FLOAT)val; 
+    }
+  }
+  else {
+    const char *eyec = "AzSvect::set (all)"; 
+    a.free(&elm); 
+    a.alloc(&elm, row_num, eyec, "elm"); 
+    elm_num = row_num; 
+    int ex; 
+    for (ex = 0; ex < elm_num; ++ex) {
+      elm[ex].no = ex; 
+      elm[ex].val = (AZ_MTX_FLOAT)val; 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::change_rowno(int new_row_num, const AzIntArr *ia_old2new, 
+                           bool do_zero_negaindex)
+{
+  const char *eyec = "AzSvect::change_rowno"; 
+  if (ia_old2new->size() != row_num) {
+    throw new AzException(eyec, "insufficient index"); 
+  }
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    int new_row = ia_old2new->get(elm[ex].no); 
+    if (new_row == elm[ex].no) continue; 
+    if (new_row < 0) {
+      if (do_zero_negaindex) elm[ex].val = 0; 
+      else                   throw new AzException(eyec, "negative index"); 
+    }
+    else if (new_row >= new_row_num) {
+      throw new AzException(eyec, "new row# is out of range"); 
+    }
+    elm[ex].no = new_row; 
+  }
+  row_num = new_row_num; 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::change_rowno(int new_row_num, const AzIntArr *ia_old2new, 
+                           bool do_zero_negaindex)
+{
+  if (column == NULL) {
+    row_num = new_row_num; 
+    return; 
+  }
+  int col; 
+  for (col = 0; col < col_num; ++col) {
+    if (column[col] != NULL) {
+      column[col]->change_rowno(new_row_num, ia_old2new, do_zero_negaindex);
+    }
+  }
+  row_num = new_row_num; 
+}                           
+
+/*-------------------------------------------------------------*/
+void AzSvect::add(int row_no, double val) 
+{
+  const char *eyec = "AzSvect::add"; 
+  if (row_no < 0 || row_no >= row_num) {
+    throw new AzException(eyec, "row# is out of range"); 
+  }
+  if (val == 0) {
+    return; 
+  }
+  int where = to_insert(row_no); 
+  double new_val = (double)elm[where].val + val; 
+  _checkVal(new_val); 
+  elm[where].val = (AZ_MTX_FLOAT)new_val; 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::plus_one_log()
+{
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val == 0); 
+    else if (elm[ex].val < 0) {
+      throw new AzException("AzSvect::plus_one_log", "Negative input"); 
+    }
+    else elm[ex].val = log(elm[ex].val+1); 
+  }
+}
+/*--------------------------------
