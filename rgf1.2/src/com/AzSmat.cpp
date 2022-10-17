@@ -1453,4 +1453,227 @@ double AzSvect::normalize()
 {
   int ex; 
   double norm2 = 0; 
-  for (ex = 0; ex < e
+  for (ex = 0; ex < elm_num; ++ex) {
+    norm2 += (elm[ex].val * elm[ex].val); 
+  }
+
+  if (norm2 != 0) {
+    norm2 = sqrt(norm2); 
+
+    for (ex = 0; ex < elm_num; ++ex) {
+      double new_val = (double)elm[ex].val / norm2; 
+      _checkVal(new_val); 
+      elm[ex].val = (AZ_MTX_FLOAT)new_val; 
+    }
+  }
+  return norm2; 
+}
+
+/*-------------------------------------------------------------*/
+double AzSvect::normalize1()
+{
+  int ex; 
+  double sum = 0; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    sum += elm[ex].val; 
+  }
+
+  if (sum != 0) {
+    for (ex = 0; ex < elm_num; ++ex) {
+      double new_val = (double)elm[ex].val / sum; 
+      _checkVal(new_val); 
+      elm[ex].val = (AZ_MTX_FLOAT)((double)elm[ex].val / sum); 
+    }
+  }
+  return sum; 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::clear()
+{
+  a.free(&elm); 
+  elm_num = 0; 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::zeroOut()
+{
+  elm_num = 0; 
+}
+
+/*-------------------------------------------------------------*/
+int AzSvect::next(AzCursor &cursor, double &out_val) const 
+{
+  int nonzero_ex = MAX(cursor.get(), 0); 
+  for ( ; nonzero_ex < elm_num; ++nonzero_ex) {
+    if (elm[nonzero_ex].val != 0) {
+      break;
+    }
+  }
+
+  cursor.set(nonzero_ex + 1);  /* prepare for next "next" */
+
+  if (nonzero_ex < elm_num) {
+    out_val = elm[nonzero_ex].val; 
+    return elm[nonzero_ex].no; 
+  }
+
+  /*---  end of the elements  ---*/
+  out_val = 0; 
+  return AzNone; 
+} 
+
+/*-------------------------------------------------------------*/
+void AzSvect::dump(const AzOut &out, const char *header, 
+                     const AzStrArray *sp_row, 
+                     int cut_num) const
+{
+  if (out.isNull()) return; 
+
+  const char *my_header = ""; 
+  if (header != NULL) my_header = header; 
+
+  AzPrint o(out); 
+  int indent = 3; 
+  o.printBegin(my_header, ",", "=", indent); 
+  o.print("elm_num", elm_num); 
+  o.printEnd(); 
+
+  if (cut_num > 0) {
+    _dump(out, sp_row, cut_num); 
+    return; 
+  }
+
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val == 0) {
+      continue;  
+    }
+    o.printBegin("", " ", "=", indent); 
+    o.inBrackets(elm[ex].no, 4); 
+    o.print(elm[ex].val, 5, true); 
+    if (sp_row != NULL) {
+      const char *row_header = sp_row->c_str(elm[ex].no); 
+      o.inParen(row_header); 
+    }
+    o.printEnd(); 
+  }
+  o.flush(); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::_dump(const AzOut &out, 
+                     const AzStrArray *sp_row, 
+                     int cut_num) const
+{
+  AzIFarr ifa_nz; 
+  nonZero(&ifa_nz); 
+
+  ifa_nz.sort_Float(false); 
+  ifa_nz.cut(cut_num); 
+  int num = ifa_nz.size(); 
+
+  AzPrint o(out); 
+  int ix; 
+  for (ix = 0; ix < num; ++ix) {
+    int row_no; 
+    double val = ifa_nz.get(ix, &row_no); 
+
+    int indent = 3; 
+    o.printBegin("", " ", "=", indent); 
+    o.inBrackets(row_no, 4); 
+    o.print(val, 5, true); 
+    if (sp_row != NULL) {
+      const char *row_header = sp_row->c_str(row_no); 
+      o.inParen(row_header); 
+    }
+    o.printEnd();
+  }
+  o.newLine(); 
+  o.flush();  
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::zerooutNegative()
+{
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) if (elm[ex].val < 0) elm[ex].val = 0; 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::cut(double min_val)
+{
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (fabs(elm[ex].val) < min_val) {
+      elm[ex].val = 0; 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::cut(double min_val)
+{
+  if (column == NULL)  return; 
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) if (column[cx] != NULL) column[cx]->cut(min_val); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::only_keep(int num)
+{
+  if (num <= 0) throw new AzException("AzSvect::only_keep", "Expected a positive number"); 
+  int nz = nonZeroRowNum(); 
+  if (nz <= num) return; 
+ 
+  AzIFarr ifa; ifa.prepare(elm_num); 
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val != 0) {
+      ifa.put(ex, fabs(elm[ex].val)); 
+    }
+  }
+  ifa.sort_Float(false); 
+  ifa.cut(num); 
+  AzIFarr ifa_val; ifa_val.prepare(ifa.size()); 
+  int ix; 
+  for (ix = 0; ix < ifa.size(); ++ix) {
+    ifa.get(ix, &ex); 
+    ifa_val.put(elm[ex].no, elm[ex].val); 
+  }
+  ifa_val.sort_Int(true); 
+  load(&ifa_val); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::only_keep(int num) 
+{
+  if (column == NULL)  return; 
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) if (column[cx] != NULL) column[cx]->only_keep(num); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::zerooutNegative()
+{
+  if (column == NULL) return;
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) if (column[cx] != NULL) column[cx]->zerooutNegative();
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::zeroOut()
+{
+  if (column == NULL) {
+    return; 
+  }
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) {
+    if (column[cx] != NULL) {
+      column[cx]->zeroOut(); 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::load(con
