@@ -1676,4 +1676,210 @@ void AzSmat::zeroOut()
 }
 
 /*-------------------------------------------------------------*/
-void AzSvect::load(con
+void AzSvect::load(const AzIntArr *ia_row, double val, 
+                   bool do_ignore_negative)
+{
+  int num; 
+  const int *row = ia_row->point(&num); 
+  AzIFarr ifa_row_val; 
+  ifa_row_val.prepare(num); 
+  int ix; 
+  for (ix = 0; ix < num; ++ix) {
+    if (!do_ignore_negative || row[ix] >= 0) ifa_row_val.put(row[ix], val); 
+  }
+  load(&ifa_row_val); 
+}
+
+/* must be called in the order of the rows */
+/*-------------------------------------------------------------*/
+void AzSvect::set_inOrder(int row_no, double val)
+{
+  const char *eyec = "AzSvect::set_inOrder"; 
+
+  if (row_no < 0 || row_no >= row_num) {
+    throw new AzException(eyec, "row# is out of range"); 
+  }
+  if (elm_num > 0 && 
+      elm[elm_num-1].no >= row_no) {
+    throw new AzException(eyec, "input is not in the order"); 
+  }
+
+  int where = elm_num; 
+
+  int elm_num_max = a.size(); 
+  if (elm_num >= elm_num_max) {
+    elm_num_max += inc(); 
+    elm_num_max = MIN(elm_num_max, row_num);
+    a.realloc(&elm, elm_num_max, eyec, "elm"); 
+  }
+
+  ++elm_num; 
+
+  elm[where].no = row_no; 
+  elm[where].val = (AZ_MTX_FLOAT)val; 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::load(const AzIFarr *ifa_row_val) 
+{  
+  const char *eyec = "AzSvect::load"; 
+  int num = ifa_row_val->size(); 
+  
+  clear_prepare(num); 
+
+  int prev_row = -1; 
+
+  int ix; 
+  for (ix = 0; ix < num; ++ix) {
+    int row; 
+    double val = ifa_row_val->get(ix, &row);     
+    if (row < 0 || row >= row_num || /* out of range */
+        row <= prev_row) { /* out of order */
+      cout << "row=" << row << " row_num=" << row_num << " prev_row=" << prev_row << endl; 
+      throw new AzException("AzSvect::load", "Invalid input"); 
+    }
+
+    elm[elm_num].no = row; 
+    _checkVal(val); 
+    elm[elm_num].val = (AZ_MTX_FLOAT)val; 
+    ++elm_num; 
+    prev_row = row;  /* corrected on 2/18/2014 */    
+  }
+}
+
+/*-------------------------------------------------------------*/
+bool AzSmat::isSame(const AzSmat *inp) const
+{
+  if (col_num != inp->col_num) return false; 
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) {
+    bool isZero1 = isZero(cx); 
+    bool isZero2 = inp->isZero(cx); 
+    if (isZero1 != isZero2) return false; 
+    if (isZero1) continue; 
+    if (!column[cx]->isSame(inp->column[cx])) return false; 
+  }
+  return true; 
+}
+
+/*-------------------------------------------------------------*/
+bool AzSvect::isSame(const AzSvect *inp) const
+{
+  if (row_num != inp->row_num) return false; 
+
+  int ex = 0, ex1 = 0; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val == 0) continue;  /* ignore zero */
+    for ( ; ex1 < inp->elm_num; ++ex1) {
+      if (inp->elm[ex1].val == 0) continue; /* ignore zero */
+      if (inp->elm[ex1].no != elm[ex].no || 
+          inp->elm[ex1].val != elm[ex].val) {
+        return false; /* different! */
+      }
+      break; /* matched */
+    }
+    if (ex1 >= inp->elm_num) {
+      return false; 
+    }
+    ++ex1; /* matched */
+  }
+
+  for ( ; ex1 < inp->elm_num; ++ex1) {
+    if (inp->elm[ex1].val != 0) {
+      return false;  /* extra non-zero components */
+    }
+  }
+  return true; 
+}
+
+/*-------------------------------------------------------------*/
+double AzSmat::nonZeroNum(double *ratio) const
+{
+  if (ratio != NULL) {
+    *ratio = 0; 
+  }
+  double out = 0; 
+  if (column == NULL) return out; 
+  int cx; 
+  for (cx = 0; cx < col_num; ++cx) {
+    if (column[cx] != NULL) {
+      out += (double)column[cx]->nonZeroRowNum(); 
+    }
+  }
+  if (ratio != NULL && out != 0) {
+    *ratio = (double)out/(double)((double)row_num*(double)col_num); 
+  }
+  return out; 
+}
+
+/*-------------------------------------------------------------*/
+int AzSmat::nonZeroColNum() const
+{
+  if (column == NULL) return 0; 
+  int num = 0; 
+  int col; 
+  for (col = 0; col < col_num; ++col) {
+    if (column[col] != NULL && 
+        !column[col]->isZero()) {
+      ++num; 
+    }
+  }
+  return num; 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat ::cap(double cap_val) {
+  int col; 
+  for (col = 0; col < col_num; ++col) {
+    if (column[col] != NULL) {
+      column[col]->cap(cap_val); 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::cap(double cap_val) {
+  if (cap_val <= 0) {
+    throw new AzException("AzSvect::cap", "cap value must be non-negative"); 
+  }
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val > cap_val) {
+      elm[ex].val = cap_val;      
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::rbind(const AzSmat *m1)
+{
+  const char *eyec = "AzSmat::rbind"; 
+  if (colNum() == 0) {
+    set(m1); 
+    return; 
+  }
+  
+  if (m1->colNum() != colNum()) {
+    throw new AzException(eyec, "#col mismatch"); 
+  }
+  int offs = rowNum(); 
+  resize(offs+m1->rowNum(), colNum()); 
+  int cx; 
+  for (cx = 0; cx < colNum(); ++cx) {
+    const AzSvect *v0 = col(cx); 
+    const AzSvect *v1 = m1->col(cx); 
+    AzIFarr ifa; 
+    ifa.prepare(v0->nonZeroRowNum()+v1->nonZeroRowNum());
+    v0->nonZero(&ifa);  
+    AzCursor cur;     
+    for ( ; ; ) {
+      double val;
+      int row = v1->next(cur, val); 
+      if (row < 0) break; 
+      ifa.put(row+offs, val); 
+    }
+    col_u(cx)->load(&ifa); 
+  }
+}
+
+/*-----------------------------------------------
