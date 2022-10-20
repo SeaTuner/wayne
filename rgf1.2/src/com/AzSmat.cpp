@@ -1882,4 +1882,202 @@ void AzSmat::rbind(const AzSmat *m1)
   }
 }
 
-/*-----------------------------------------------
+/*-------------------------------------------------------------*/
+void AzSmat::cbind(const AzSmat *m1)
+{
+  const char *eyec = "AzSmat::cbind"; 
+  if (colNum() <= 0 || rowNum() <= 0) {
+    set(m1); 
+    return; 
+  }
+  if (m1->rowNum() != rowNum()) {
+    throw new AzException(eyec, "#row mismatch"); 
+  }
+  int offs = colNum(); 
+  resize(m1->rowNum(), offs+m1->colNum()); 
+  int cx; 
+  for (cx = 0; cx < m1->colNum(); ++cx) {
+    col_u(offs+cx)->set(m1->col(cx)); 
+  }
+}
+
+#if 0 
+/*------------------------------------------------------------*/ 
+void AzSvect::polarize() 
+{
+  if (min() >= 0) {
+    resize(row_num*2); 
+    return; 
+  }
+
+  AzIFarr ifa; 
+  ifa.prepare(elm_num*2); 
+  int ex;
+  for (ex = 0; ex < elm_num; ++ex) { 
+    const AZI_VECT_ELM *ep = &elm[ex]; 
+    if (ep->val > 0) {
+      ifa.put(ep->no, ep->val); 
+    }
+    else if (ep->val < 0) {
+      ifa.put(ep->no + row_num, -ep->val); 
+    }
+  }
+  resize(row_num*2); 
+  load(&ifa); 
+}
+#endif 
+
+/*------------------------------------------------------------*/ 
+void AzSvect::polarize() 
+{
+  if (min() >= 0) {
+    resize(row_num*2); 
+    return; 
+  }
+
+  int org_row_num = row_num; 
+  int org_elm_num = elm_num; 
+  resize(row_num*2); 
+  int ex;
+  for (ex = 0; ex < org_elm_num; ++ex) { 
+    if (elm[ex].val < 0) {
+      set_inOrder(elm[ex].no+org_row_num, -elm[ex].val); 
+      elm[ex].val = 0; 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::binarize() {
+  if (column == NULL) return; 
+  int col; 
+  for (col = 0; col < col_num; ++col) if (column[col] != NULL) column[col]->binarize(); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSmat::binarize1() {
+  if (column == NULL) return; 
+  int col; 
+  for (col = 0; col < col_num; ++col) if (column[col] != NULL) column[col]->binarize1(); 
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::binarize()
+{
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val > 0) {
+      elm[ex].val = 1; 
+    }
+    else if (elm[ex].val < 0) {
+      elm[ex].val = -1; 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzSvect::binarize1()
+{
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) {
+    if (elm[ex].val != 0) {
+      elm[ex].val = 1; 
+    }
+  }
+}
+/*-------------------------------------------------------------*/
+bool AzSvect::isOneOrZero() const {
+  int ex; 
+  for (ex = 0; ex < elm_num; ++ex) if (elm[ex].val != 0 && elm[ex].val != 1) return false; 
+  return true; 
+}
+/*-------------------------------------------------------------*/
+bool AzSmat::isOneOrZero() const {
+  if (column == NULL) return true; 
+  int col; 
+  for (col = 0; col < col_num; ++col) {
+    if (column[col] != NULL) {
+      bool ret = column[col]->isOneOrZero();
+      if (!ret) return false; 
+    }
+  }
+  return true; 
+}
+/*-------------------------------------------------------------*/
+bool AzSmat::isOneOrZero(int col) const {
+  if (column == NULL) return true; 
+  if (column[col] == NULL) return true;  
+  return column[col]->isOneOrZero(); 
+}
+
+/*------------------------------------------------*/
+/*------------------------------------------------*/
+void AzSmatVar::set(const AzSmatVar *mv0, 
+                    const int *dxs0, /* mv0's data points */
+                    int dxs0_num)   /* size of dxs0 */
+{
+  const char *eyec = "AzSmatVar::set(mv0,dxs,num)"; 
+  int dnum = dxs0_num; 
+  data_num = dnum; 
+
+  /*---  generate column index  ---*/
+  ia_dcolind.reset(dnum*2, 0); 
+  
+  int offs = 0; 
+  AzIntArr ia_cols; 
+  int *h_dcolind = ia_dcolind.point_u(); 
+  int ix; 
+  for (ix = 0; ix < dxs0_num; ++ix) {
+    int dx0 = dxs0[ix]; 
+    int col0 = mv0->col_begin(dx0); 
+    int col1 = mv0->col_end(dx0); 
+
+    h_dcolind[ix*2] = offs; 
+    offs += (col1 - col0);  
+    h_dcolind[ix*2+1] = offs; 
+    int col; 
+    for (col = col0; col < col1; ++col) {
+      ia_cols.put(col); 
+    }
+  }
+
+  m.set(mv0->data(), ia_cols.point(), ia_cols.size()); 
+}  
+
+/*------------------------------------------------*/
+/* static */
+void AzSmatVar::rbind_cbind(const AzSmatVar *mv0,
+                          const AzSmatVar *mv1, 
+                          AzSmatVar *m_out)
+{
+  const char *eyec = "AzSmatVar::rbind_cbind"; 
+  int data_num = mv0->dataNum(); 
+  if (data_num != mv1->dataNum()) {
+    throw new AzException(eyec, "#data conflict"); 
+  }
+  AzSmat m_new(mv0->rowNum()+mv1->rowNum(), mv0->colNum()+mv1->colNum()); 
+  AzIntArr ia_new_dcolind; 
+  int col = 0; 
+  int dx; 
+  for (dx = 0; dx < data_num; ++dx) {
+    ia_new_dcolind.put(col); 
+    int col0_0 = mv0->col_begin(dx), col1_0 = mv0->col_end(dx); 
+    int col0_1 = mv1->col_begin(dx), col1_1 = mv1->col_end(dx); 
+      
+    AzSmat m00; m00.set(mv0->data(), col0_0, col1_0); 
+    AzSmat m10(mv1->rowNum(), col1_0-col0_0); 
+    m00.rbind(&m10); 
+      
+    AzSmat m01(mv0->rowNum(), col1_1-col0_1); 
+    AzSmat m11; m11.set(mv1->data(), col0_1, col1_1);
+    m01.rbind(&m11); 
+      
+    m00.cbind(&m01); 
+    int new_col0 = col, new_col1 = new_col0+m00.colNum(); 
+    m_new.set(new_col0, new_col1, &m00); 
+      
+    col = new_col1; 
+    ia_new_dcolind.put(col); 
+  }
+  m_out->reset(&m_new, &ia_new_dcolind); 
+}  
