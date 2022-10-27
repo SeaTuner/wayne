@@ -161,4 +161,189 @@ public:
     int ix; 
     for (ix = 0; ix < sp_tmp.size(); ++ix) {
       AzBytArr s(s_str->c_str(), sp_tmp.c_str(ix)); 
-      put(s.point(), s.length(), sp_tmp.getCount(i
+      put(s.point(), s.length(), sp_tmp.getCount(ix), sp_tmp.getValue(ix));     
+    }
+  }
+
+  void commit(bool do_ignore_value_conflict=false); 
+  void build_index(); 
+  int size() const { return ent_num; }
+
+  const AzByte *point(int ent_no, int *out_len) const; 
+  const AzByte *point(int ent_no) const; 
+  virtual const char *c_str(int ent_no) const {
+    return (char *)point(ent_no); 
+  }
+  int getLen(int ent_no) const; 
+  AZint8 getCount(int str_no) const; 
+
+  void getAllCount(AzIFarr *ifa_count) const {
+    ifa_count->reset(); 
+    ifa_count->prepare(ent_num); 
+    int ex; 
+    for (ex = 0; ex < ent_num; ++ex) {
+      ifa_count->put(ex, (double)ent[ex].count); 
+    }
+  }
+  double getAllCount() const {
+    double count = 0; 
+    int ex; 
+    for (ex = 0; ex < ent_num; ++ex) count += (double)ent[ex].count; 
+    return count; 
+  }
+  
+  void removeEntry(int ent_no); 
+  void removeEntries(const AzIntArr *ia_rmv_ex) {
+    if (ia_rmv_ex == NULL) return; 
+    int num; 
+    const int *rmv_ex = ia_rmv_ex->point(&num); 
+    int ix; 
+    for (ix = 0; ix < num; ++ix) {
+      removeEntry(rmv_ex[ix]); 
+    }
+  }
+
+  int find(const AzByte *bytes, int bytes_len) const;  
+  int find(const AzBytArr *byteq) const {
+    return find(byteq->point(), byteq->getLen()); 
+  }
+  virtual int find(const char *str) const {
+    return find((AzByte *)str, Az64::cstrlen(str)); 
+  }
+
+  virtual void dump(const AzOut &file, const char *header) const; 
+
+  virtual void get(int ent_no, AzBytArr *byteq) const 
+  {
+    int len; 
+    const AzByte *bytes = point(ent_no, &len); 
+    byteq->concat(bytes, len); 
+  }
+  virtual void get(const int *exs, int num, const char *dlm, AzBytArr *s) const {
+    int ix; 
+    for (ix = 0; ix < num; ++ix) {
+      if (ix > 0) s->c(dlm); 
+      if (exs[ix] < 0) s->c("*null*"); 
+      else             s->c(c_str(exs[ix])); 
+    }
+  }
+  virtual void get(const AzIntArr *ia_exs, const char *dlm, AzBytArr *s) const {
+    get(ia_exs->point(), ia_exs->size(), dlm, s); 
+  }
+
+  bool isThisSearchReady() const {
+    return isCommitted; 
+  }
+  inline bool isThisCommitted() const {
+    return isCommitted; 
+  }
+
+  void reduce(int min_count); 
+
+  /*---  prohibit assign operator  ---*/
+  AzStrPool(const AzStrPool &) {
+    throw new AzException("AzStrPool(const&)", "= is prohibited"); 
+  }
+  AzStrPool & operator =(const AzStrPool &inp) {
+    if (this == &inp) return *this; 
+    throw new AzException("AzStrPool =", "no support"); 
+  }
+
+  void writeText(const char *fn) const {
+    AzFile file(fn); 
+    file.open("wb"); 
+    int ix;
+    for (ix = 0; ix < size(); ++ix) {
+      AzBytArr s; 
+      get(ix, &s); 
+      s.nl(); 
+      s.writeText(&file); 
+    }
+    file.close(true); 
+  }
+  void readText(const char *fn, int maxlen) {
+    reset(); 
+    AzFile file(fn); 
+    file.open("rb"); 
+    AzBytArr ba_buff; 
+    AzByte *buff = ba_buff.reset(maxlen+1, 0); 
+    for ( ; ; ) {
+      int len = file.gets(buff, maxlen); 
+      if (len <= 0) break; 
+      for ( ; len > 0; --len) {
+        if (buff[len-1] != '\n') break; 
+      }
+      put(buff, len); 
+    }    
+    file.close(); 
+  }
+
+  /*-------------------------------------------------------------*/
+  virtual void show() const {
+    int ix; 
+    for (ix = 0; ix < size(); ++ix) {
+      show_item(ix); 
+    }
+  }
+
+  /*-------------------------------------------------------------*/
+  virtual void show_by_count(bool is_ascending) const {
+    AzIFarr ifa_ix_count; 
+    ifa_ix_count.prepare(size()); 
+    int ix; 
+    for (ix = 0; ix < size(); ++ix) {
+      ifa_ix_count.put(ix, (double)getCount(ix)); 
+    } 
+    ifa_ix_count.sort_Float(is_ascending); 
+  
+    for (ix = 0; ix < ifa_ix_count.size(); ++ix) {
+      int idx; 
+      ifa_ix_count.get(ix, &idx); 
+      show_item(idx); 
+    }
+  }  
+
+  virtual bool has_same_strings_in_same_order(const AzStrPool *sp) {
+    if (sp->size() != size()) return false; 
+    int ix; 
+    for (ix = 0; ix < sp->size(); ++ix) if (strcmp(sp->c_str(ix), c_str(ix)) != 0) return false; 
+    return true; 
+  }
+ 
+  double keep_topfreq(int keep_num, bool do_keep_ties, bool do_release_mem=false); 
+  void reduce(const AzIntArr *ia, bool do_release_mem=false) {
+    if (ia == NULL) throw new AzException("AzStrPool::reduce", "null input"); 
+    reduce(ia->point(), ia->size(), do_release_mem); 
+  }
+  void reduce(const int *exs, int exs_num, bool do_release_mem=false) { /* must be sorted */
+    const char *eyec = "AzStrPool::reduce(exs,exs_num)"; 
+    if (do_release_mem) {
+      throw new AzException(eyec, "No support for do_release_mem yet"); 
+    }
+    int new_ex = 0; 
+    int ix; 
+    for (ix = 0; ix < exs_num; ++ix) {
+      int ex = exs[ix]; 
+      if (ex < 0 || ex >= ent_num) throw new AzException(eyec, "index is out of range"); 
+      if (ix > 0 && ex <= exs[ix-1]) throw new AzException(eyec, "index array must be sorted and have no duplication"); 
+      if (ex != new_ex) {
+        ent[new_ex] = ent[ex];       
+      }
+      ++new_ex;
+    }
+    ent_num = new_ex; 
+    if (isCommitted) {
+      build_index(); 
+    }
+  }
+  
+protected:
+  void _swap(); 
+  void initialize(); 
+  void _read(AzFile *file); 
+  void _copy(const AzStrPool *sp2); 
+  void _copy(const AzStrArray *sp2); 
+  int genIndexKey(const AzByte *bytes, int bytes_len) const; 
+
+  int inc_ent(); 
+  AZint8 inc_data(
