@@ -147,3 +147,180 @@ void AzSvDataS::read_target(const char *y_fn, AzDvect *v_y, int max_data_num)
   readData(y_fn, 1, &m_y, max_data_num); 
   int y_data_num = m_y.colNum(); 
   v_y->reform(y_data_num); 
+  int dx; 
+  for (dx = 0; dx < y_data_num; ++dx) {
+    double val = m_y.get(0, dx); 
+    v_y->set(dx, val); 
+  }
+}                       
+
+/*------------------------------------------------------------------*/
+void AzSvDataS::_parseDataLine(const AzByte *inp, 
+                              int inp_len, 
+                              int f_num, 
+                              const char *data_fn, 
+                              int line_no, 
+                              /*---  output  ---*/
+                              AzIFarr &ifa_ex_val)
+{
+  const char *eyec = "AzSvDataS::_parseDataLine"; 
+
+  ifa_ex_val.prepare(f_num); 
+  const AzByte *wp = inp, *line_end = inp + inp_len; 
+//  AzIFarr ifa_ex_val; 
+  int ex = 0; 
+  for ( ; ; ) {
+    if (wp >= line_end) break; 
+
+#if 1
+    int str_len; 
+    const AzByte *str = AzTools::getString(&wp, line_end, &str_len); 
+    if (str_len > 0) {
+      if (ex >= f_num) {
+        AzBytArr s("Error in "); s.c(data_fn); s.c(": Line#="); s.cn(line_no); 
+        AzPrint::writeln(log_out, s); 
+        s.reset(); s.c("Too many values per line: expected "); s.cn(f_num); s.c(" values.");  
+        throw new AzException(AzInputNotValid, eyec, s.c_str()); 
+      }
+      
+#if 1
+      double val = my_atof((char *)str, eyec, line_no);    
+#else
+      double val = atof((char *)str);      
+      if (val == 0 && *str != '0' && *str != '+' && *str != '-') {
+        AzBytArr s("Invalid token "); s.c(str, str_len); s.c(" in "); s.c(data_fn); s.c(": Line#="); s.cn(line_no); 
+        AzPrint::writeln(log_out, s); 
+        throw new AzException(AzInputNotValid, eyec, s.c_str()); 
+      } 
+#endif       
+      
+      if (val != 0) {
+        ifa_ex_val.put(ex, val); 
+      }
+      ++ex;
+    }
+#else    
+    AzBytArr str_token; 
+    AzTools::getString(&wp, line_end, &str_token); 
+    if (str_token.getLen() > 0) {
+      if (ex >= f_num) {
+        AzBytArr s("Error in "); s.c(data_fn); s.c(": Line#="); s.cn(line_no); 
+        AzPrint::writeln(log_out, s); 
+        s.reset(); s.c("Too many values per line: expected "); s.cn(f_num); s.c(" values.");  
+        throw new AzException(AzInputNotValid, eyec, s.c_str()); 
+      }
+      /* double val = atof(str_token.c_str()); */
+      double val = my_atof(str_token.c_str(), eyec, line_no);    
+      if (val != 0) {
+        ifa_ex_val.put(ex, val); 
+      }
+      ++ex; 
+    }
+#endif     
+  }
+  if (ex < f_num) {
+    AzTimeLog::print("Error in Line#=", line_no, log_out); 
+    throw new AzException(AzInputNotValid, eyec, "Too few values"); 
+  }
+
+//  m_feat->load(col, &ifa_ex_val); 
+}
+
+/*------------------------------------------------------------------*/
+int AzSvDataS::countFeatures(const AzByte *line, 
+                             const AzByte *line_end)
+{
+  const AzByte *wp = line; 
+  int count = 0; 
+  for ( ; wp < line_end; ) {
+    AzBytArr s; 
+    AzTools::getString(&wp, line_end, &s); 
+    if (s.length() > 0) {
+      ++count; 
+    }
+  }
+
+  return count;
+}
+
+#if 0 
+/*------------------------------------------------------------------*/
+void AzSvDataS::readData_Small(const char *data_fn, 
+                         int expected_f_num, 
+                         /*---  output  ---*/
+                         AzSmat *m_feat)
+{
+  const char *eyec = "AzSvDataS::readData_Small"; 
+
+  AzFile file(data_fn); 
+  file.open("rb"); 
+  int file_size = file.size(); 
+  AzBytArr bq_data; 
+  AzByte *data = bq_data.reset(file_size+1, 0); 
+  file.seekReadBytes(0, file_size, data); 
+  file.close(); 
+
+  const char *data_end = (char *)data + file_size; 
+  const char *wp = (char *)data; 
+  AzIIarr iia_begin_end; 
+  for ( ; ; ) {
+    if (wp >= data_end) break; 
+    const char *next_wp = strchr(wp, '\n'); 
+    if (next_wp == NULL) next_wp = data_end; 
+    iia_begin_end.put(Az64::ptr_diff(wp-(char *)data), 
+                      Az64::ptr_diff(next_wp-(char *)data)); 
+    wp = next_wp+1; 
+  }
+
+  int data_num = iia_begin_end.size(); 
+  if (data_num <= 0) {
+    throw new AzException(AzInputNotValid, eyec, "Empty data"); 
+  }
+
+  bool isSparse = false; 
+  int offs0, offs1; 
+  iia_begin_end.get(0, &offs0, &offs1); 
+  AzBytArr s_first_line(data+offs0, offs1-offs0); 
+  int f_num = if_sparse(s_first_line, expected_f_num); 
+  if (f_num > 0) {
+    isSparse = true; 
+    --data_num; /* b/c 1st line is information */
+    if (data_num <= 0) {
+      throw new AzException(AzInputNotValid, eyec, "Empty sparse data file"); 
+    }
+  }
+  else {
+    f_num = expected_f_num; 
+    if (f_num <= 0) {
+      f_num = countFeatures(data+offs0, data+offs1); 
+    }
+    if (f_num <= 0) {
+      throw new AzException(AzInputNotValid, eyec, "No feature in the first line"); 
+    }
+  }
+
+  m_feat->reform(f_num, data_num); 
+
+  /*---  read features  ---*/
+  int dx; 
+  for (dx = 0; dx < data_num; ++dx) {
+    int line_no = dx + 1; 
+    if (isSparse) {
+      int offs0, offs1; 
+      iia_begin_end.get(dx+1, &offs0, &offs1); /* +1 for 1st line */
+      parseDataLine_Sparse(data+offs0, offs1-offs0, f_num, data_fn, 
+                    line_no+1, /* "+1" for the header */
+                    m_feat, dx); 
+    }
+    else {
+      int offs0, offs1; 
+      iia_begin_end.get(dx, &offs0, &offs1); 
+      parseDataLine(data+offs0, offs1-offs0, f_num, data_fn, line_no, 
+                    m_feat, dx); 
+    }
+  }
+}
+#endif 
+
+/*------------------------------------------------------------------*/
+void A
