@@ -346,4 +346,18 @@ protected:
   int genIndexKey(const AzByte *bytes, int bytes_len) const; 
 
   int inc_ent(); 
-  AZint8 inc_data(
+  AZint8 inc_data(AZint8 min_inc); 
+
+  inline void checkRange(int ent_no, const char *eyec) const 
+  {
+    if (ent_no < 0 || ent_no >= ent_num) {
+      throw new AzException(eyec, "out of range"); 
+    }
+  }
+
+  /*-------------------------------------------------------------*/
+  virtual void show_item(int idx) const {
+    cout << c_str(idx) << "\t" << getCount(idx) << endl; 
+  }
+}; 
+#endif 
