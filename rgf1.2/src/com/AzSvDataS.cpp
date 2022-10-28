@@ -490,4 +490,101 @@ int AzSvDataS::if_sparse(AzBytArr &s_line,
 }
 
 
-/*---------------------------------
+/*------------------------------------------------------------------*/
+/*------------------------------------------------------------------*/
+/* static */
+void AzSvDataS::mergeData(int argc, 
+                         const char *argv[])
+{
+  if (argc < 9) {
+    cout << "x_fn x_names_fn fn_template str doSparse digits out_x_fn out_n_fn nm1 [nm2 ...]"<<endl; 
+    return; 
+  }
+  int argx = 0; 
+  const char *x_fn = argv[argx++]; 
+  const char *x_names_fn = argv[argx++]; 
+  const char *fn_template = argv[argx++]; 
+  const char *str = argv[argx++]; 
+  const char *doSparse_str = argv[argx++]; 
+  int digits = atol(argv[argx++]); 
+  const char *out_x_fn = argv[argx++]; 
+  const char *out_n_fn = argv[argx++]; 
+  int num = argc-argx; 
+  const char **names = argv+argx; 
+  bool doSparse = false; 
+  if (*doSparse_str == '1' || *doSparse_str == 'Y') doSparse = true; 
+  mergeData(x_fn, x_names_fn, fn_template, str, doSparse, digits, out_x_fn, out_n_fn, num, names); 
+}
+
+/*----------------------------------------------------------------------*/
+void AzSvDataS::mergeData(const char *x_fn, 
+                         const char *x_names_fn, 
+                         const char *fn_template, 
+                         const char *str, 
+                         bool doSparse, 
+                         int digits, 
+                         const char *out_x_fn, 
+                         const char *out_n_fn, 
+                         int num,
+                         const char *names[])
+{
+  AzSvDataS dataset; 
+  dataset.read_features_only(x_fn, x_names_fn); 
+  mergeData(dataset.feat(), dataset.featInfo(), fn_template, str, 
+            doSparse, digits, out_x_fn, out_n_fn, num, names); 
+}
+
+/*----------------------------------------------------------------------*/
+void AzSvDataS::mergeData(const AzSmat *m_x, 
+                         const AzSvFeatInfo *feat, 
+                         const char *fn_template, 
+                         const char *str, 
+                         bool doSparse, 
+                         int digits, 
+                         const char *out_x_fn, 
+                         const char *out_n_fn,
+                         int num,
+                         const char *names[])
+{
+  const char *eyec = "AzSvDataS::mergeData"; 
+
+  int data_num = m_x->colNum(); 
+  int f_num = m_x->rowNum(); 
+  if (feat->featNum() != f_num) {
+    throw new AzException(eyec, "Conflict btw m_x and featInfo"); 
+  }
+  AzFile n_file(out_n_fn); 
+  n_file.open("wb"); 
+  int fx; 
+  for (fx = 0; fx < feat->featNum(); ++fx) {
+    AzBytArr s; feat->desc(fx, &s); s.nl(); 
+    s.writeText(&n_file); 
+  }
+
+  AzSmat m;
+  m_x->transpose(&m); 
+  m.resize(data_num, f_num+num); 
+  AzStrPool sp_names; 
+  for (fx = 0; fx < num; ++fx) {
+    AzBytArr s_fn(fn_template); 
+    s_fn.replace("*", names[fx]); 
+
+    AzDvect v; 
+    AzSvDataS::readVector(s_fn.c_str(), &v); 
+    if (v.rowNum() != m.rowNum()) {
+      throw new AzException(AzInputError, eyec, "conflict in #data:", s_fn.c_str()); 
+    }
+    m.col_u(f_num+fx)->set(&v);    
+
+    AzBytArr s_nm;
+    if (AzTools::isSpecified(str)) s_nm.c(str);  
+    s_nm.c(names[fx]); s_nm.nl(); 
+    s_nm.writeText(&n_file);  
+  }
+  n_file.close(true); 
+
+  AzSmat m1; 
+  m.transpose(&m1); 
+  m1.writeText(out_x_fn, digits, doSparse); 
+}
+ 
