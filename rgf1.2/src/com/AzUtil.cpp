@@ -1142,3 +1142,821 @@ void AzIntArr::_swap()
 /*------------------------------------------------------------------*/
 void AzIntArr::write(AzFile *file) 
 {
+  file->writeInt(num); 
+  _swap(); 
+  file->writeBytes(ints, sizeof(ints[0])*num); 
+  _swap(); 
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::reset(int num, int initial_value) 
+{
+  reset(); 
+  initialize(num, initial_value); 
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::fill(int num, int first_value)
+{
+  reset(); 
+  initialize(num, first_value); 
+  int ix; 
+  for (ix = 0; ix < num; ++ix) {
+    ints[ix] = first_value + ix; 
+  }
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::cut(int new_num) 
+{
+  if (num > new_num) {
+    num = new_num; 
+  }
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::unique() 
+{
+  if (ints == NULL || num <= 0) {
+    return; 
+  }
+
+  qsort(ints, num, sizeof(ints[0]), az_compareInt_A);   
+
+  int ix1 = 0; 
+  int ix; 
+  for (ix = 0; ix < num; ) {
+    if (ix != ix1) {
+      ints[ix1] = ints[ix]; 
+    }
+
+    ++ix; 
+    for ( ; ix < num; ++ix) {
+      if (ints[ix] != ints[ix1]) 
+        break;
+    }
+
+    ++ix1; 
+  }
+  num = ix1; 
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::increment(int index) 
+{
+  checkIndex(index, "AzIntArr::increment"); 
+  ++ints[index]; 
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::_realloc()
+{
+  int num_max = a.size(); 
+  if (num_max <= 0) {
+    num_max = 32; 
+  }
+  else if (num_max < 1024 * 1024) {
+    num_max *= 2; 
+  }
+  else {
+    num_max += 1024 * 1024; 
+  }
+
+  a.realloc(&ints, num_max, "AzIntArr::_realloc", "ints"); 
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::concat(const AzIntArr *ia2) 
+{
+  concat(ia2->ints, ia2->num); 
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::concat(const int *ints2, int ints2_num)
+{
+  if (ints2 == NULL || ints2_num == 0) {
+    return; 
+  }
+
+  int new_num = num + ints2_num; 
+  int num_max = a.size(); 
+  if (new_num > num_max) {
+    num_max = (new_num+1023)/1024*1024; 
+    a.realloc(&ints, num_max, "AzIntArr::concat", "ints"); 
+  }
+
+  int ix; 
+  for (ix = 0; ix < ints2_num; ++ix) {
+    ints[num + ix] = ints2[ix]; 
+  }
+  num = new_num; 
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::remove_by_value(int val)
+{
+  int ix1 = 0; 
+  int ix; 
+  for (ix = 0; ix < num; ++ix) {
+    if (ints[ix] != val) {
+      if (ix1 != ix) ints[ix1] = ints[ix]; 
+      ++ix1; 
+    }
+  }
+  num = ix1; 
+}
+
+/*------------------------------------------------------------------*/
+/* static */
+int AzIntArr::count_nonnegative(const int *ints, int num) 
+{
+  int count = 0; 
+  int ix; 
+  for (ix = 0; ix < num; ++ix) if (ints[ix] >= 0) ++count; 
+  return count; 
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::remove(int idx)
+{
+  if (idx < 0 || idx >= num) {
+    return; 
+  }
+
+  int ix; 
+  for (ix = idx + 1; ix < num; ++ix) {
+    ints[ix-1] = ints[ix]; 
+  }
+  --num; 
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::insert(int idx, int val)
+{
+  int num_max = a.size(); 
+  if (num >= num_max) {
+    _realloc(); 
+  }
+
+  int ix; 
+  for (ix = num - 1; ix >= idx; --ix) {
+    ints[ix+1] = ints[ix]; 
+  }
+
+  ints[idx] = val; 
+  ++num; 
+}
+
+/*------------------------------------------------------------------*/
+int az_compareInt_A(const void *v1, const void *v2) 
+{
+  return (*((int *)v1) - *((int *)v2)); 
+}
+
+/*------------------------------------------------------------------*/
+int az_compareInt_D(const void *v1, const void *v2) 
+{
+  return (*((int *)v2) - *((int *)v1)); 
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::sort(bool ascending)
+{
+  if (num <= 1) {
+    return; 
+  }
+
+  if (ascending) {
+    qsort(ints, num, sizeof(ints[0]), az_compareInt_A); 
+  }
+  else {
+    qsort(ints, num, sizeof(ints[0]), az_compareInt_D); 
+  }
+}
+
+/*------------------------------------------------------------------*/
+int *AzIntArr::my_bsearch(int key)
+{
+  if (num <= 0 || ints == NULL) return NULL; 
+  return (int *)bsearch(&key, ints, num, sizeof(ints[0]), az_compareInt_A); 
+}
+
+/*------------------------------------------------------------------*/
+void AzIntArr::print(const AzOut &out, const char *header) const 
+{
+  if (out.isNull()) return; 
+  AzPrint o(out); 
+  o.printBegin(header, ""); 
+  o.print("("); 
+  int ix; 
+  for (ix = 0; ix < num; ++ix) {
+    o.print(ints[ix]); 
+    if (ix == 0) o.resetDlm(","); 
+  }
+  o.printEnd(")"); 
+}
+
+/*-------------------------------------------------------------*/
+int AzIntArr::count(int int_val) const 
+{
+  if (ints == NULL) return 0; 
+  int out = 0; 
+  int ix; 
+  for (ix = 0; ix < num; ++ix) {
+    if (ints[ix] == int_val) ++out; 
+  }
+  return out; 
+}
+
+/*-------------------------------------------------------------*/
+int AzIntArr::replace(int from_val, int to_val) 
+{
+  if (ints == NULL) return 0; 
+  int count = 0; 
+  int ix; 
+  for (ix = 0; ix < num; ++ix) {
+    if (ints[ix] == from_val) {
+      ints[ix] = to_val; 
+      ++count; 
+    }
+  }
+  return count; 
+}
+
+/***************************************************************/
+/***************************************************************/
+/*                       AzBytArr                              */
+/***************************************************************/
+/*-------------------------------------------------------------*/
+void AzBytArr::transfer_from(AzBytArr *inp)
+{
+  a.transfer_from(&inp->a, &bytes_long, &inp->bytes_long, "AzBytArr::transfer_from"); 
+  bytes_long = inp->bytes_long; 
+  memcpy(bytes_short, inp->bytes_short, sizeof(bytes_short)); 
+  len = inp->len;  /* added 9/17/2011 */
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::concatInt(int number, 
+                        int width, 
+                        bool doFillWithZero)
+{
+  stringstream s; 
+  if (width > 0) s.width(width); 
+  if (doFillWithZero) s.fill('0'); 
+  s << number; 
+  if (width > 0) {
+    concat(s.str().c_str()); 
+    return; 
+  }
+
+  /*---  remove leading/tailing space though I don't know if there is any  ---*/
+  if (getLen() == 0) {
+    concat(s.str().c_str()); 
+    strip(); 
+  }
+  else {
+    AzBytArr str_temp(s.str().c_str()); 
+    str_temp.strip(); 
+    concat(&str_temp); 
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::concatInt8(AZint8 number, 
+                        int width, 
+                        bool doFillWithZero)
+{
+  stringstream s; 
+  if (width > 0) s.width(width); 
+  if (doFillWithZero) s.fill('0'); 
+  s << number; 
+  if (width > 0) {
+    concat(s.str().c_str()); 
+    return; 
+  }
+
+  /*---  remove leading/tailing space though I don't know if there is any  ---*/
+  if (getLen() == 0) {
+    concat(s.str().c_str()); 
+    strip(); 
+  }
+  else {
+    AzBytArr str_temp(s.str().c_str()); 
+    str_temp.strip(); 
+    concat(&str_temp); 
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::concatFloat(double number, 
+                          int precision, 
+                          bool doScientific)
+{
+  stringstream s; 
+  if (precision > 0) {
+    s.precision(precision); 
+  }
+  if (doScientific) s << scientific; 
+  s << number; 
+
+  /*---  remove leading/tailing space though I don't know if there is any  ---*/
+  if (getLen() == 0) {
+    concat(s.str().c_str()); 
+    strip(); 
+  }
+  else {
+    AzBytArr str_temp(s.str().c_str()); 
+    str_temp.strip(); 
+    concat(&str_temp); 
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzBytArr::replace(const char *old_str, 
+                       const char *new_str)
+{
+  const char *inp_str = c_str(); 
+  const char *ptr = strstr(inp_str, old_str); 
+  if (ptr == NULL) return; 
+
+  int old_str_len = Az64::cstrlen(old_str); 
+  int front_len = Az64::ptr_diff(ptr - inp_str, "AzBytArr::replace"); 
+  int back_len = length() - front_len - old_str_len; 
+
+  AzBytArr new_s; 
+  new_s.concat(inp_str, front_len); 
+  new_s.concat(new_str); 
+  new_s.concat(ptr+old_str_len, back_len); 
+  reset(&new_s); 
+}
+
+/* assume ascii */
+/*-------------------------------------------------------------*/
+void AzBytArr::strip()
+{
+  int len; 
+  const AzByte *data = point(&len); 
+  const AzByte *bp = data, *data_end = data + len; 
+  for ( ; bp < data_end; ++bp) {
+    if (*bp > 0x20) break; 
+  }
+  const AzByte *ep = data_end; 
+  for ( ; ep-1 >= data; --ep) {
+    if (*(ep-1) > 0x20) break; 
+  }
+  if (bp >= ep) {
+    clear(); 
+  }
+  else if (bp == data && ep == data_end); /* nop */
+  else {
+    AzBytArr str_temp(bp, Az64::ptr_diff(ep - bp, "AzBytArr::strip")); 
+    clear(); 
+    concat(&str_temp); 
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::print(const AzByte *inp_bytes, int inp_bytes_len, const AzOut &out) 
+{
+  if (out.isNull()) return; 
+  int ix; 
+  for (ix = 0; ix < inp_bytes_len; ++ix) {
+    *out.o << inp_bytes[ix]; 
+    /* fprintf(out.fp, "%c", inp_bytes[ix]); */
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::print(const AzOut &out) const
+{
+  int my_bytes_len; 
+  const AzByte *my_bytes = point(&my_bytes_len); 
+  print(my_bytes, my_bytes_len, out); 
+}
+ 
+/*-------------------------------------------------------------*/
+void AzBytArr::replace(char old_char, char new_char) 
+{
+  if (old_char == '\0') {
+    throw new AzException("AzBytArr::replace", "can't replace null char"); 
+  }
+  if (bytes_long != NULL) {
+    int ix; 
+    for (ix = 0; ix < len; ++ix) {
+      if (*(bytes_long+ix) == old_char) *(bytes_long+ix) = new_char; 
+    }
+  }
+  else {
+    int ix; 
+    for (ix = 0; ix < MIN(AZI_BYTES_SHORT_LEN, len); ++ix) {
+      if (bytes_short[ix] == old_char) bytes_short[ix] = new_char; 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+AzBytArr::AzBytArr()
+{
+  initialize(); 
+}
+
+/*-------------------------------------------------------------*/
+AzBytArr::AzBytArr(const AzBytArr *inp_byteq) 
+{
+  initialize(); 
+  initialize(inp_byteq); 
+}
+
+/*-------------------------------------------------------------*/
+AzBytArr::AzBytArr(const AzBytArr &inp_byteq) 
+{
+  initialize(); 
+  initialize(&inp_byteq); 
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::initialize(const AzBytArr *inp_byteq) 
+{
+  if (inp_byteq == NULL) {
+    return; 
+  }
+
+  int bytes_len; 
+  const AzByte *bytes = inp_byteq->point(&bytes_len); 
+  initialize(bytes, bytes_len); 
+}
+
+/*-------------------------------------------------------------*/
+AzBytArr::AzBytArr(const AzByte *bytes, int bytes_len) 
+{
+  initialize(); 
+  initialize(bytes, bytes_len); 
+}
+
+/*-------------------------------------------------------------*/
+AzBytArr::AzBytArr(const char *cstr) 
+{
+  initialize(); 
+  const AzByte *bytes = NULL; 
+  int bytes_len = 0; 
+  if (cstr != NULL) {
+    bytes = (AzByte *)cstr; 
+    bytes_len = Az64::cstrlen(cstr, "AzBytArr::AzBytArr"); 
+  }
+
+  initialize(bytes, bytes_len); 
+}
+
+/*-------------------------------------------------------------*/
+AzBytArr::AzBytArr(int number)
+{
+  initialize(); 
+  concatInt(number); 
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::initialize()
+{
+  len = 0; 
+  bytes_long = NULL; 
+  bytes_short[0] = 0; 
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::initialize(const AzByte *bytes, int bytes_len) 
+{
+  const char *eyec = "AzBytArr::initialize"; 
+
+  if (bytes == NULL || bytes_len <= 0) {
+    return; 
+  }
+
+  len = bytes_len; 
+  if (len <= AZI_BYTES_SHORT_LEN) {
+    memcpy(bytes_short, bytes, bytes_len); 
+    *(bytes_short + bytes_len) = 0; 
+  }
+  else {
+    a.alloc(&bytes_long, len + 1, eyec, "bytes_long"); 
+    memcpy(bytes_long, bytes, bytes_len);
+    *(bytes_long + bytes_len) = 0; 
+  }
+}
+
+/*-------------------------------------------------------------*/
+AzByte *AzBytArr::reset(int bytes_len, AzByte val) 
+{
+  const char *eyec = "AzBytArr::reset(len,val)"; 
+
+  reset(); 
+  if (bytes_len <= 0) {
+    return point_u(); 
+  }
+
+  len = bytes_len; 
+  if (len <= AZI_BYTES_SHORT_LEN) {
+    memset(bytes_short, val, len); 
+    *(bytes_short + len) = 0; 
+  }
+  else {
+    a.alloc(&bytes_long, len + 1, eyec, "bytes_long"); 
+    memset(bytes_long, val, len);
+    *(bytes_long + len) = 0; 
+  }
+  return point_u(); 
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::update(int offs, AzByte new_val) 
+{
+  if (offs < 0 || offs >= len) {
+    throw new AzException("AzBytArr::update", "out of range"); 
+  }
+
+  if (bytes_long != NULL) {
+    bytes_long[offs] = new_val; 
+  }
+  else {
+    bytes_short[offs] = new_val; 
+  }
+}
+
+/*-------------------------------------------------------------*/
+AzBytArr::AzBytArr(AzFile *file) 
+{
+  initialize(); 
+  _read(file); 
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::read(AzFile *file)
+{
+  reset(); 
+  _read(file); 
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::_read(AzFile *file) 
+{
+  len = file->readInt(); 
+  if (len > 0) {
+    if (len <= AZI_BYTES_SHORT_LEN) {
+      file->seekReadBytes(-1, len + 1, bytes_short); 
+    }
+    else {
+      a.alloc(&bytes_long, len + 1, "AzBytArr::_read", "bytes_long"); 
+      file->seekReadBytes(-1, len + 1, bytes_long); 
+      /* bytes_long = (AzByte *)file->readBytes(len + 1); */
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::write(AzFile *file) 
+const
+{
+  file->writeInt(len); 
+
+  if (len > 0) {
+    if (bytes_long != NULL) {
+      file->writeBytes(bytes_long, len + 1); 
+    }
+    else {
+      file->writeBytes(bytes_short, len + 1); 
+    }
+  }
+}
+
+/*-------------------------------------------------------------*/
+int AzBytArr::compare(const AzBytArr *byteq2) const
+{
+  int bytes2_len; 
+  const AzByte *bytes2 = byteq2->point(&bytes2_len); 
+  return compare(bytes2, bytes2_len); 
+}
+
+/*-------------------------------------------------------------*/
+int AzBytArr::compare(const AzByte *bytes2, int bytes2_len) const
+{
+  int bytes1_len; 
+  const AzByte *bytes1 = point(&bytes1_len); 
+  int cmp = memcmp(bytes1, bytes2, MIN(bytes1_len, bytes2_len)); 
+  if (cmp != 0) return cmp; 
+
+  if      (bytes1_len < bytes2_len) return -1; 
+  else if (bytes1_len > bytes2_len) return 1; 
+  return 0; 
+}
+
+/*-------------------------------------------------------------*/
+bool AzBytArr::beginsWith(AzBytArr *byteq2) const
+{
+  if (byteq2 == NULL) {
+    return true; 
+  }
+
+  int bytes1_len, bytes2_len; 
+  const AzByte *bytes1 = point(&bytes1_len); 
+  const AzByte *bytes2 = byteq2->point(&bytes2_len); 
+  if (bytes2_len == 0) {
+    true; 
+  }
+
+  if (bytes1_len < bytes2_len) {
+    return false; 
+  }
+
+  if (memcmp(bytes1, bytes2, bytes2_len) == 0) {
+    return true; 
+  }
+  return false; 
+}
+
+/*-------------------------------------------------------------*/
+bool AzBytArr::endsWith(AzBytArr *byteq2) const
+{
+  if (byteq2 == NULL) {
+    return true; 
+  }
+
+  int bytes1_len, bytes2_len;  
+  const AzByte *bytes1 = point(&bytes1_len); 
+  const AzByte *bytes2 = byteq2->point(&bytes2_len); 
+  if (bytes2_len <= 0) {
+    return true; 
+  }
+
+  if (bytes1_len < bytes2_len) {
+    return false; 
+  }
+
+  if (memcmp(bytes1 + bytes1_len - bytes2_len, bytes2, bytes2_len) == 0) {
+    return true; 
+  }
+  return false; 
+}
+
+/*-------------------------------------------------------------*/
+bool AzBytArr::contains(const char *str) const
+{
+  const char *str0 = c_str();  
+  if (strstr(str0, str) != NULL) return true; 
+  return false; 
+}
+
+/*-------------------------------------------------------------*/
+bool AzBytArr::contains(AzByte ch) const
+{
+  const char *str0 = c_str();  
+  if (strchr(str0, ch) != NULL) return true; 
+  return false; 
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::prepare_inc(int inc)
+{
+  int max_len = a.size() + MAX(0, inc); 
+  a.realloc(&bytes_long, max_len, "AzBytArr::prepare_inc", "bytes_long"); 
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::concat(const AzByte *inp_bytes, int inp_len) 
+{
+  const char *eyec = "AzBytArr::concat"; 
+
+  if (inp_bytes == NULL || inp_len <= 0) 
+    return; 
+
+  if (len + inp_len <= AZI_BYTES_SHORT_LEN) {
+    memcpy(bytes_short + len, inp_bytes, inp_len); 
+    *(bytes_short + len + inp_len) = 0; 
+  }
+  else {
+    int max_len = a.size(); 
+    int req_len = len + inp_len + 1; 
+    if (max_len < req_len) {
+      int my_len; 
+      if (req_len < 4096) my_len = MAX(req_len, MIN(4096, max_len*2)); 
+      else                my_len = (req_len+4095)/4096*4096; 
+      a.realloc(&bytes_long, my_len, eyec, "bytes_long"); 
+    }
+
+    if (len <= AZI_BYTES_SHORT_LEN) {
+      memcpy(bytes_long, bytes_short, len); 
+    }
+    memcpy(bytes_long + len, inp_bytes, inp_len);     
+    *(bytes_long + len + inp_len) = 0; 
+  }
+  len += inp_len; 
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::concat(AzByte one_byte)
+{
+  concat(&one_byte, 1); 
+}
+
+/*-------------------------------------------------------------*/
+AzByte *AzBytArr::point_u()
+{
+  if (bytes_long != NULL) {
+    return bytes_long; 
+  }
+  else {
+    return bytes_short; 
+  }
+}
+
+/*-------------------------------------------------------------*/
+const AzByte *AzBytArr::point() const
+{
+  if (bytes_long != NULL) {
+    return bytes_long; 
+  }
+  else {
+    return bytes_short; 
+  }
+}
+
+/*-------------------------------------------------------------*/
+const AzByte *AzBytArr::point(int *out_len) const
+{
+  *out_len = len; 
+
+  if (bytes_long != NULL) {
+    return bytes_long; 
+  }
+  else {
+    return bytes_short; 
+  }
+}
+
+/*-------------------------------------------------------------*/
+int AzBytArr::getLen() const
+{
+  return len; 
+}
+
+/*-------------------------------------------------------------*/
+AzBytArr::~AzBytArr()
+{
+  a.free(&bytes_long); len = 0; 
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::reset()
+{
+  a.free(&bytes_long); 
+  bytes_short[0] = 0; 
+  len = 0; 
+}
+
+/*-------------------------------------------------------------*/
+void AzBytArr::lwr() 
+{
+  char *c;
+  if (bytes_long != NULL) {
+    c = (char *)bytes_long;
+  }
+  else {
+    c = (char *)bytes_short; 
+  }
+  while (*c) {
+    *c = (char)tolower((int)*c);
+    c++;
+  }
+}
+
+/***************************************************************/
+/*                      AzTimeLog                             */
+/***************************************************************/
+void AzTimeLog::print(const char *msg, const AzOut &out) 
+{
+  if (out.isNull()) return; 
+  _printTime(out); 
+  AzPrint::writeln(out, msg); 
+  out.flush(); 
+}
+
+/*-------------------------------------------------------------*/
+void AzTimeLog::print(const char *msg1, const char *msg2, const AzOut &out) 
+{
+  if (out.isNull()) return; 
+  _printTime(out); 
+  AzPrint::write(out, msg1); 
+  AzPrint::writeln(out, msg2); 
+  out.flush(); 
+}
+
+/*-------------------------------------------------------------*/
+void AzTimeLog::_printTime(const AzOut &out)
+{
+  if (out.isNull()) return; 
+  time_t ltime; 
+  time(&ltime); 
+  AzBytArr str_time(ctime(&ltime)); 
+  str_time.strip(); /* remove new line in the end */
+  str_time.c(": "); 
+  AzPrint::write(out, str_time); 
+}
