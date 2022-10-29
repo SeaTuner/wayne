@@ -50,4 +50,44 @@ public:
     int f_num = inp->featNum(); 
     arr_desc.reset(); 
     int fx; 
-    for (fx = 0; fx < f
+    for (fx = 0; fx < f_num; ++fx) {
+      AzBytArr *ptr = arr_desc.new_slot(); 
+      inp->desc(fx, ptr); 
+    }
+  }
+  void reset(const AzStrArray *inp) {
+    int f_num = inp->size(); 
+    arr_desc.reset(); 
+    int fx; 
+    for (fx = 0; fx < f_num; ++fx) {
+      AzBytArr *ptr = arr_desc.new_slot(); 
+      ptr->reset(inp->c_str(fx)); 
+    }    
+  }
+  void reset(int inp_f_num) {
+    arr_desc.reset(); 
+    int fx; 
+    for (fx = 0; fx < inp_f_num; ++fx) {
+      AzBytArr s("F"); 
+      s.cn(fx, 3, true); /* width=3, fillWithZero */
+      arr_desc.new_slot()->reset(&s); 
+    }
+  }
+
+  void append(const AzSvFeatInfo *inp) {
+    int fx; 
+    for (fx = 0; fx < inp->featNum(); ++fx) {
+      inp->desc(fx, arr_desc.new_slot()); 
+    }
+  }
+
+  /*---  to implement AzStrArray  ---*/
+  int size() const { return featNum(); }
+  const char *c_str(int fx) const {
+    if (fx < 0 || fx >= featNum()) {
+      return "???"; 
+    }
+    return arr_desc.point(fx)->c_str(); 
+  }
+}; 
+#endif 
