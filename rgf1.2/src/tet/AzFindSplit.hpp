@@ -84,4 +84,16 @@ protected:
   virtual double evalSplit(const Az_forFindSplit i[2], 
                            double bestP[2]) /* output */
                            const; 
-  /*
+  /*----------------------------------------------------------------*/
+
+  void _findBestSplit(int nx, 
+                      /*---  output  ---*/
+                      AzTrTsplit *best_split); 
+  void loop(AzTrTsplit *best_split, 
+            int fx, /* feature# */
+            const AzSortedFeat *sorted, 
+            int dxs_num, 
+            const Az_forFindSplit *total); 
+}; 
+
+#endif 
