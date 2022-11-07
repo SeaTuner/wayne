@@ -354,4 +354,186 @@ void AzOptOnTree::update_with_features(
                       AzRgf_forDelta *for_del) /* updated */
 {
   if (ens->usingTempFile()) {
-    _update_with_fe
+    _update_with_features_TempFile(nlam, nsig, py_avg, for_del); 
+  }
+  else {
+    _update_with_features(nlam, nsig, py_avg, for_del); 
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzOptOnTree::update_intercept(
+                      double nlam, 
+                      double nsig, 
+                      double py_avg, 
+                      AzRgf_forDelta *for_delta) /* updated */
+{
+  /*---  intercept  ---*/
+  if (doIntercept || doUnregIntercept) {
+    double my_nlam = nlam, my_nsig = nsig; 
+    if (doUnregIntercept) {
+      my_nlam = my_nsig = 0; 
+    }
+    AzIntArr ia_all_dx; 
+    ia_all_dx.range(0, v_p.rowNum());
+    double delta = getDelta(ia_all_dx.point(), ia_all_dx.size(), 
+                            var_const, my_nlam, my_nsig, 
+                            py_avg, for_delta); 
+    var_const += delta; 
+    updatePred(ia_all_dx.point(), ia_all_dx.size(), delta, &v_p); 
+  }
+}
+
+/*--------------------------------------------------------*/
+double AzOptOnTree::getDelta(const int *dxs, 
+                             int dxs_num, 
+                                 double w,
+                                 double nlam, 
+                                 double nsig, 
+                                 double py_avg, 
+                                 /*---  inout  ---*/
+                                 AzRgf_forDelta *for_del) /* updated */
+const 
+{
+  const char *eyec = "AzOptOnTree::getDelta"; 
+  if (dxs == NULL) return 0; 
+  if (dxs_num <= 0) {
+    throw new AzException(eyec, "no data indexes"); 
+  }
+
+  const double *fixed_dw = NULL; 
+  if (!AzDvect::isNull(&v_fixed_dw)) fixed_dw = v_fixed_dw.point(); 
+
+  const double *p = v_p.point(); 
+  const double *y = v_y.point(); 
+
+  double nega_dL = 0, ddL= 0; 
+  if (fixed_dw == NULL) {
+    AzLoss::sum_deriv(loss_type, dxs, dxs_num, p, y, py_avg, 
+                      nega_dL, ddL); 
+  }
+  else {
+    AzLoss::sum_deriv_weighted(loss_type, dxs, dxs_num, p, y, fixed_dw, py_avg, 
+                      nega_dL, ddL); 
+  }
+
+  double ddL_nlam = ddL + nlam; 
+  if (ddL_nlam == 0) ddL_nlam = 1;  /* this shouldn't happen, though */
+  double delta = (nega_dL-nlam*w)*eta/ddL_nlam; 
+  if (nsig > 0) {
+    double del1; 
+    if (w+delta>0) del1 = delta - nsig*eta/ddL_nlam; 
+    else           del1 = delta + nsig*eta/ddL_nlam; 
+    if ((w+delta)*(w+del1) <= 0) delta = -w; 
+    else                         delta = del1; 
+  }
+
+  for_del->check_delta(&delta, max_delta); 
+  return delta; 
+}       
+
+/*--------------------------------------------------------*/
+void AzOptOnTree::checkParam() const
+{
+  const char *eyec = "AzOptOnTree::checkParam"; 
+  if (lambda < 0) {
+    throw new AzException(AzInputNotValid, eyec, 
+                          kw_lambda, "must be non-negative"); 
+  }
+  if (sigma < 0) {
+    throw new AzException(AzInputNotValid, eyec, 
+                          kw_sigma, "must be non-negative"); 
+  }
+  if (eta <= 0) {
+    throw new AzException(AzInputNotValid, eyec, kw_eta, "must be positive"); 
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzOptOnTree::dumpWeights(const AzOut &out,                        
+                        int print_max, 
+                        bool changeLine) const 
+{
+  if (out.isNull()) return; 
+  int nz = v_w.nonZeroRowNum(); 
+
+  AzPrint o(out); 
+  o.printBegin("", ",", "="); 
+  o.print("#non_zero_weight", nz); 
+  o.print("var_const", var_const, 5); 
+  o.print("fixed_const", fixed_const, 5); 
+  o.printEnd(); 
+  o.writeln(""); 
+  const char *name = "OUT"; 
+  AzTaskTools::dumpWeights(out, &v_w, name, tree_feat, print_max, changeLine); 
+}
+
+/*--------------------------------------------------------*/
+void 
+AzOptOnTree::optimize(AzRgfTreeEnsemble *rgf_ens, 
+                      const AzTrTreeFeat *inp_tree_feat, 
+                      bool doRefreshP, 
+                      int ite_num, 
+                      double lam, 
+                      double sig)
+{
+  ens = rgf_ens; 
+  tree_feat = inp_tree_feat; 
+  synchronize(); 
+  if (doRefreshP) {
+    refreshPred(); 
+  }
+  iterate(ite_num, lam, sig); 
+  updateTreeWeights(rgf_ens); 
+  ens = NULL; 
+  tree_feat = NULL; 
+}
+
+/*------------------------------------------------------------------*/
+void AzOptOnTree::updateTreeWeights(AzRgfTreeEnsemble *ens) const
+{
+  int dtree_num = ens->size(); 
+  int tx; 
+  for (tx = 0; tx < dtree_num; ++tx) {
+    ens->tree_u(tx)->resetWeights(); 
+  }
+
+  const double *weight = weights()->point(); 
+  double const_val = constant(); 
+  ens->set_constant(const_val); 
+
+  int num = tree_feat->featNum(); 
+  int fx; 
+  for (fx = 0; fx < num; ++fx) {
+    if (weight[fx] != 0) {
+      const AzTrTreeFeatInfo *fp = tree_feat->featInfo(fx); 
+      ens->tree_u(fp->tx)->setWeight(fp->nx, weight[fx]); 
+    }
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzOptOnTree::_refreshPred()
+{
+  if (v_w.rowNum() == 0 && v_p.rowNum() == 0) return; 
+
+  v_p.zeroOut(); 
+  v_p.set(var_const+fixed_const);  
+
+  const double *w = v_w.point(); 
+  int f_num = v_w.rowNum(); 
+  int fx; 
+  for (fx = 0; fx < f_num; ++fx) {
+    if (tree_feat->featInfo(fx)->isRemoved) continue; 
+    int dxs_num; 
+    const int *dxs = data_points(fx, &dxs_num); 
+    updatePred(dxs, dxs_num, w[fx], &v_p); 
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzOptOnTree::_refreshPred_TempFile()
+{
+  if (v_w.rowNum() == 0 && v_p.rowNum() == 0) return; 
+
+ 
