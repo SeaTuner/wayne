@@ -536,4 +536,158 @@ void AzOptOnTree::_refreshPred_TempFile()
 {
   if (v_w.rowNum() == 0 && v_p.rowNum() == 0) return; 
 
+  v_p.zeroOut(); 
+  v_p.set(var_const+fixed_const);  
+
+  const double *w = v_w.point(); 
+
+  int tree_num = ens->size(); 
+  int tx; 
+  for (tx = 0; tx < tree_num; ++tx) {
+    ens->tree_u(tx)->restoreDataIndexes(); 
+    AzIIarr iia_nx_fx; 
+    tree_feat->featIds(tx, &iia_nx_fx); 
+    int num = iia_nx_fx.size(); 
+    int ix; 
+    for (ix = 0; ix < num; ++ix) {
+      int nx, fx; 
+      iia_nx_fx.get(ix, &nx, &fx); 
+
+      if (tree_feat->featInfo(fx)->isRemoved) continue; 
+      int dxs_num; 
+      const int *dxs = data_points(fx, &dxs_num); 
+      updatePred(dxs, dxs_num, w[fx], &v_p); 
+    }
+    ens->tree_u(tx)->releaseDataIndexes(); 
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzOptOnTree::refreshPred()
+{
+  if (ens->usingTempFile()) {
+    _refreshPred_TempFile(); 
+  }
+  else {
+    _refreshPred(); 
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzOptOnTree::resetPred(const AzBmat *b_tran, 
+                                AzDvect *out_v_p) /* output */
+const
+{
+  int data_num = b_tran->rowNum(); 
+  out_v_p->reform(data_num); 
+  out_v_p->set(var_const+fixed_const); 
+  AzCursor cursor; 
+  for ( ; ; ) {
+    double val; 
+    int fx = v_w.next(cursor, val); 
+    if (fx < 0) break; 
+    const AzIntArr *ia_dx = b_tran->on_rows(fx); 
+    updatePred(ia_dx->point(), ia_dx->size(), val, out_v_p); 
+  }  
+}
  
+/*------------------------------------------------------------------*/
+void AzRgf_forDelta::check_delta(double *delta, /* inout */
+                                double max_delta) 
+{
+  if (max_delta > 0) {
+    double org_delta = *delta; 
+    *delta = MAX(-max_delta, MIN(max_delta, *delta)); 
+    if (*delta != org_delta) {
+      ++truncated; 
+    }
+  }
+  if (*delta != 0) {
+    double abs_del = fabs(*delta); 
+    my_max = MAX(my_max, abs_del); 
+    sum_delta += abs_del; 
+    ++changed; 
+  }
+}
+
+/*------------------------------------------------------------------*/
+double AzRgf_forDelta::avg_delta() const 
+{
+  double avg = sum_delta; 
+  if (changed != 0) avg /= (double)changed; 
+  return avg; 
+}
+
+/*--------------------------------------------------------*/
+/*--------------------------------------------------------*/
+void AzOptOnTree::printHelp(AzHelp &h) const
+{
+  h.begin(Azopt_config, "AzOptOnTree"); 
+  h.item_required_lvl(kw_lambda, help_lambda, 1); 
+  h.item_experimental(kw_sigma, help_sigma, sigma_dflt); 
+  h.item(kw_doUseAvg, help_doUseAvg); 
+  AzBytArr s_dflt; 
+  s_dflt.cn(max_ite_num_dflt_oth);  s_dflt.c(help_oth_loss); s_dflt.c("; "); 
+  s_dflt.cn(max_ite_num_dflt_expo); s_dflt.c(help_expo_loss); 
+  h.item(kw_max_ite_num, help_max_ite_num, s_dflt.c_str()); 
+  h.item_experimental(kw_doIntercept, help_doIntercept); 
+  h.item(kw_eta, help_eta, eta_dflt); 
+  h.item_experimental(kw_exit_delta, help_exit_delta, exit_delta_dflt); 
+  h.end(); 
+}
+
+/*------------------------------------------------------------------*/
+void AzOptOnTree::resetParam(AzParam &p)
+{
+  p.vFloat(kw_lambda, &lambda); 
+  p.vFloat(kw_sigma, &sigma); 
+  p.vInt(kw_max_ite_num, &max_ite_num); 
+  p.vFloat(kw_eta, &eta); 
+  p.vFloat(kw_exit_delta, &exit_delta); 
+  p.vFloat(kw_max_delta, &max_delta); 
+  p.swOn(&doUseAvg, kw_doUseAvg); 
+  p.swOff(&doIntercept, kw_not_doIntercept); /* useless but keep this for compatibility */
+  p.swOn(&doIntercept, kw_doIntercept); 
+
+  if (max_ite_num <= 0) {
+    max_ite_num = max_ite_num_dflt_oth; 
+    if (AzLoss::isExpoFamily(loss_type)) {
+      max_ite_num = max_ite_num_dflt_expo; 
+    }
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzOptOnTree::printParam(const AzOut &out, 
+                             bool beVerbose) const 
+{
+  if (out.isNull()) return; 
+
+  AzPrint o(out); 
+  o.reset_options(); 
+  o.set_precision(5); 
+  o.ppBegin("AzOptOnTree", "Optimization"); 
+  o.printV("loss=", AzLoss::lossName(loss_type)); 
+  o.printV(kw_max_ite_num, max_ite_num); 
+  o.printV(kw_lambda, lambda); 
+  o.printV_posiOnly(kw_sigma, sigma); 
+  o.printV(kw_eta, eta); 
+  o.printV(kw_exit_delta, exit_delta); 
+  o.printV(kw_max_delta, max_delta); 
+
+  o.printSw(kw_doUseAvg, doUseAvg); 
+  o.printSw(kw_doIntercept, doIntercept); 
+
+  o.printSw(kw_opt_beVerbose, beVerbose); 
+
+  /*---  these are fixed; displaying for maintenance purpose only  ---*/
+  o.printSw("doRefershP", doRefreshP); 
+  o.printSw("doUnregIntercept", doUnregIntercept);  /* unregularized intercept */
+
+  o.ppEnd(); 
+}
+
+#if 0 
+/*--------------------------------------------------------*/
+
+#endif 
