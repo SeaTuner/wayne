@@ -190,3 +190,47 @@ protected:
 
   virtual double getDelta(const int *dxs, int dxs_num, double w,
                   double nlam, double nsig, double py_avg, 
+                  /*---  inout  ---*/
+                  AzRgf_forDelta *for_delta) 
+                  const; 
+
+  virtual void checkParam() const; 
+
+  virtual void monitorLoss(int ite, 
+                   double delta, 
+                   const AzOut &out) const; 
+  double getDelta(double w, 
+                  double dL, 
+                  double ddL); 
+  inline const AzTrTreeNode *node(int fx) const
+  {
+    const char *eyec = "AzOptOnTree::node"; 
+    const AzTrTreeFeatInfo *fp = tree_feat->featInfo(fx); 
+    if (fp->tx < 0) throw new AzException(eyec, "negative tx"); 
+    if (fp->nx < 0) throw new AzException(eyec, "negative nx"); 
+    return ens->tree(fp->tx)->node(fp->nx); 
+  }
+
+  inline const int *data_points(int fx, int *num) const
+  {
+    *num = node(fx)->dxs_num; 
+    return node(fx)->data_indexes(); 
+  }
+
+  virtual void refreshPred(); 
+  virtual void _refreshPred(); 
+  virtual void _refreshPred_TempFile(); 
+  inline static void updatePred(const int *dxs, int dxs_num, double delta, 
+                                AzDvect *out_v_p) {
+    out_v_p->add(delta, dxs, dxs_num);   
+  }
+  virtual void resetParam(AzParam &param); 
+
+  void updateTreeWeights(AzRgfTreeEnsemble *ens) const; 
+
+  virtual void _warmup(const AzTrTreeEnsemble_ReadOnly *ens, 
+                    const AzTrTreeFeat *tree_feat, 
+                    const AzDvect *inp_v_p); 
+}; 
+
+#endif 
