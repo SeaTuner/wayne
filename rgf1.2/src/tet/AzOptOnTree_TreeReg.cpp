@@ -120,4 +120,26 @@ const
   }
 
   const double *fixed_dw = NULL; 
-  if (!AzDvect::isNull(&v_fixed_dw)) fixed_dw = v_fi
+  if (!AzDvect::isNull(&v_fixed_dw)) fixed_dw = v_fixed_dw.point(); 
+  const double *p = v_p.point(); 
+  const double *y = v_y.point(); 
+  double nega_dL = 0, ddL= 0; 
+  if (fixed_dw == NULL) {
+    AzLoss::sum_deriv(loss_type, dxs, dxs_num, p, y, py_avg, 
+                      nega_dL, ddL); 
+  }
+  else {
+    AzLoss::sum_deriv_weighted(loss_type, dxs, dxs_num, p, y, fixed_dw, py_avg, 
+                      nega_dL, ddL);
+  }
+
+  double dR, ddR; 
+  reg->penalty_deriv(nx, &dR, &ddR); 
+
+  double dd = ddL + nlam*ddR; 
+  if (dd == 0) dd = 1; 
+  double delta = (nega_dL-nlam*dR)*eta/dd; 
+  for_delta->check_delta(&delta, max_delta); 
+
+  return delta; 
+}
