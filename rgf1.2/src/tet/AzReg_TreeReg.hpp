@@ -52,4 +52,46 @@ public:
 class AzReg_TreeReg {
 public:
   virtual void set_shared(AzReg_TreeRegShared *shared) {} 
-  virtual void check_reg_depth(const AzRe
+  virtual void check_reg_depth(const AzRegDepth *) const {}
+
+  virtual void reset(const AzTrTree_ReadOnly *inp_tree, 
+                     const AzRegDepth *inp_reg_depth) = 0; 
+
+  virtual void penalty_deriv(int nx, double *dr, 
+                             double *ddr) = 0; 
+
+  virtual void changeWeight(int nx, double w_diff) = 0; 
+
+  virtual void clearFocusNode() = 0; 
+
+  /*---  for node split  ---*/
+  //! called by AzRgf_FindSplit_TR::begin 
+  virtual void reset_forNewLeaf(const AzTrTree_ReadOnly *t, 
+                                const AzRegDepth *rdep) = 0; 
+
+  //! called by AzRgf_FindSplit_TR::findSplit 
+  virtual void reset_forNewLeaf(int f_nx, 
+                      const AzTrTree_ReadOnly *t, 
+                      const AzRegDepth *rdep) = 0; 
+
+  virtual double penalty_diff(const double leaf_w_delta[2]) const = 0; 
+  virtual void penalty_deriv(double *dr, 
+                             double *ddr) const = 0; 
+
+  /*---  for maintenance  ---*/
+  virtual void show(const AzOut &out, 
+                    const char *header) const = 0; 
+  virtual double penalty() const {
+    return -1; 
+  }
+
+  /*---------------------------------------------------------*/
+  virtual void resetParam(AzParam &param) = 0; 
+  virtual void printParam(const AzOut &out) const = 0; 
+  virtual void printHelp(AzHelp &h) const = 0; 
+
+  virtual const char *signature() const = 0; 
+  virtual const char *description() const = 0; 
+}; 
+#endif 
+
