@@ -409,4 +409,82 @@ void AzReg_TsrOpt::show(const AzOut &out,
                     const char *header, 
                     const AzRegDepth *reg_depth, 
                     int focus_nx, 
-					const AzDataArray<AzDvect> *a
+					const AzDataArray<AzDvect> *av_dbar, 
+                    const AzTrTree_ReadOnly *tree, 
+                    const AzDvect *v_bar)
+{
+  if (out.isNull()) return; 
+  AzPrint o(out); 
+  o.printBegin(header, ", ", "="); 
+  o.print("focus_nx", focus_nx); 
+  o.printEnd();   
+
+  AzDmat m_coeff; 
+  setCoeff(reg_depth, tree, &m_coeff); 
+
+  _show(focus_nx, av_dbar, tree, v_bar, tree->root(), &m_coeff, out); 
+}
+
+/*--------------------------------------------------------*/
+void AzReg_TsrOpt::_show(int focus_nx, 
+                         const AzDataArray<AzDvect> *av_dbar, 
+                         const AzTrTree_ReadOnly *tree, 
+                         const AzDvect *v_bar, 
+                         int nx, 
+                         const AzDmat *m_coeff, 
+                         const AzOut &out) 
+{
+  if (out.isNull()) return; 
+
+  const AzTrTreeNode *np = tree->node(nx); 
+
+  AzPrint o(out); 
+  o.printBegin("", ", ", "=", np->depth*2); 
+  o.inBrackets(nx,3); 
+
+  o.print("bar", v_bar->get(nx), 4); 
+  double v = v_bar->get(nx); 
+  if (np->parent_nx >= 0) {
+    v -= v_bar->get(np->parent_nx); 
+  }
+  o.print("v", v, 4); 
+  if (focus_nx >= 0) {
+    o.print("dbar", av_dbar->point(focus_nx)->get(nx)); 
+  }
+
+  if (np->isLeaf()) {
+    o.inParen(np->weight, 4); 
+  }
+  o.printEnd(); 
+
+  if (!np->isLeaf()) {
+    _show(focus_nx, av_dbar, tree, v_bar, np->le_nx, m_coeff, out); 
+    _show(focus_nx, av_dbar, tree, v_bar, np->gt_nx, m_coeff, out); 
+  }
+}
+
+/*--------------------------------------------------------*/
+/*--------------------------------------------------------*/
+void AzReg_TsrOpt::printHelp(AzHelp &h) const
+{
+  h.begin(Azopt_config, "AzReg_TsrOpt", "Min-penalty regularization"); 
+  h.item_experimental(kw_reg_ite_num, help_reg_ite_num, reg_ite_num_dflt); 
+  h.end(); 
+}
+
+/*------------------------------------------------------------------*/
+void AzReg_TsrOpt::resetParam(AzParam &p)
+{
+  p.vInt(kw_reg_ite_num, &reg_ite_num); 
+}
+
+/*--------------------------------------------------------*/
+void AzReg_TsrOpt::printParam(const AzOut &out) const 
+{
+  if (out.isNull()) return; 
+
+  AzPrint o(out); 
+  o.ppBegin("AzReg_TsrOpt", "Min-penalty regularization", ", "); 
+  o.printV(kw_reg_ite_num, reg_ite_num); 
+  o.ppEnd(); 
+}
