@@ -230,4 +230,183 @@ double AzReg_TsrOpt::_reset_forNewLeaf(int inp_focus_nx,
   return penalty_offset; 
 }
 
-/*-------------------------
+/*--------------------------------------------------------*/
+void AzReg_TsrOpt::reset_bar(int split_nx, 
+                      const AzIntArr *ia_leaf, 
+                      const AzIntArr *ia_nonleaf)
+{
+  v_bar.reform(tree->nodeNum()); 
+
+  int ix; 
+  for (ix = 0; ix < ia_leaf->size(); ++ix) {
+    int nx = ia_leaf->get(ix); 
+    v_bar.set(nx, tree->node(nx)->weight); 
+  }
+
+  double new_leaf_w[2] = {0, 0}; 
+  if (split_nx >= 0) {
+    /** 
+      *  this is for evaluating node split.  pretend that the node 
+      *  to be split is an internal node and there are two new leaves 
+      *  under it whose weights are the weight of the node to be split.  
+     **/
+    v_bar.set(split_nx, 0); 
+    double w = tree->node(split_nx)->weight; 
+    new_leaf_w[0] = new_leaf_w[1] = w; 
+  }
+
+  _propagate(reg_ite_num, tree, split_nx, new_leaf_w, ia_nonleaf, reg_depth, 
+             m_coeff, &v_bar); 
+}
+
+/*--------------------------------------------------------*/
+void AzReg_TsrOpt::deriv(int base_nx, 
+                         const AzIntArr *ia_nonleaf, 
+                         AzDvect *out_v_dbar)
+{
+  out_v_dbar->reform(tree->nodeNum()); 
+
+  int split_nx = -1; 
+  double new_leaf_w[2] = {0,0}; 
+  if (!forNewLeaf) {
+    out_v_dbar->set(base_nx, 1); 
+  }
+  else {
+    new_leaf_w[0] = 1; 
+    split_nx = base_nx; 
+  }
+
+  _propagate(reg_ite_num, tree, split_nx, new_leaf_w, ia_nonleaf, reg_depth, 
+             m_coeff, out_v_dbar); 
+}
+
+/*--------------------------------------------------------*/
+/* static */
+void AzReg_TsrOpt::_propagate(int ite_num, 
+                            const AzTrTree_ReadOnly *tree, 
+                            int split_nx, 
+                            const double new_leaf_w[2], 
+                            const AzIntArr *ia_nonleaf, 
+                            const AzRegDepth *reg_depth, 
+                            AzDmat *m_coeff, /* inout */
+                            AzDvect *v)
+{
+  const char *eyec = "AzReg_TsrOpt::propagate"; 
+
+  setCoeff(reg_depth, tree, m_coeff); 
+
+  if (split_nx >= 0 && !tree->node(split_nx)->isLeaf()) {
+    throw new AzException(eyec, "node to be split must be a leaf"); 
+  }
+
+  const int *nonleaf = ia_nonleaf->point(); 
+  double *v_arr = v->point_u(); 
+  if (v->rowNum() != tree->nodeNum()) {
+    throw new AzException(eyec, "v's dim is wrong"); 
+  }
+
+  double split_fixed_sum=0, split_coeff_sum=0, split_coeff0=0; 
+  int split_px = -1; 
+  if (split_nx >= 0) {
+    const AzTrTreeNode *np = tree->node(split_nx); 
+    const double *coeff = m_coeff->col(np->depth)->point(); 
+    split_coeff0 = coeff[0]; 
+    split_coeff_sum = coeff[coeff_sum_index]; 
+    split_fixed_sum = coeff[1]*new_leaf_w[0] + coeff[2]*new_leaf_w[1]; 
+    split_px = np->parent_nx;  
+  }
+
+  int real_nonleaf_num = ia_nonleaf->size(); 
+  if (split_nx >= 0) {
+    ++real_nonleaf_num; 
+  }
+
+  int ite; 
+  for (ite = 0; ite < ite_num; ++ite) {
+    if (split_nx >= 0) {
+      double sum = split_fixed_sum; 
+      if (split_px >= 0) {
+        sum += split_coeff0*v_arr[split_px]; 
+      }
+      sum /= split_coeff_sum; 
+      v_arr[split_nx] = sum; 
+    }
+
+    int ix; 
+    for (ix = 0; ix < ia_nonleaf->size(); ++ix) {
+      int nx = nonleaf[ix]; 
+      const AzTrTreeNode *np = tree->node(nx); 
+
+      const double *coeff = m_coeff->col(np->depth)->point(); 
+      double new_v = 0; 
+      if (np->parent_nx >= 0) {
+        new_v += coeff[0]*v_arr[np->parent_nx]; 
+      }
+      new_v += coeff[1]*v_arr[np->le_nx]; 
+      new_v += coeff[2]*v_arr[np->gt_nx]; 
+      new_v /= coeff[coeff_sum_index]; 
+
+      v_arr[nx] = new_v; 
+    }
+
+    if (real_nonleaf_num <= 1) {
+      break; /* since iteration won't change the results */
+    }
+  }
+}
+
+
+/*--------------------------------------------------------*/
+/* static */
+void AzReg_TsrOpt::setCoeff(const AzRegDepth *reg_depth, 
+                            const AzTrTree_ReadOnly *tree, 
+                            AzDmat *m_coeff)
+{
+  if (m_coeff == NULL) {
+    throw new AzException("AzReg_TsrOpt::setCoeff", "m_coeff=null"); 
+  }
+
+  int max_depth = tree->nodeNum(); /* upper bound */
+  if (m_coeff->colNum() >= max_depth+1) {
+    return; 
+  }
+  int old_max_depth = m_coeff->colNum()-1; 
+  max_depth = MAX(max_depth, 50); 
+  m_coeff->resize(coeff_sum_index+1, max_depth+1); 
+  int depth; 
+  for (depth = old_max_depth+1; depth <= max_depth; ++depth) {
+    double *coeff = m_coeff->col_u(depth)->point_u(); 
+    setCoeff(reg_depth, depth, coeff); 
+  }
+}
+
+/*--------------------------------------------------------*/
+/* static */
+void AzReg_TsrOpt::setCoeff(const AzRegDepth *reg_depth, 
+                            int depth, 
+                            double coeff[4])
+{
+  coeff[0] = coeff[1] = coeff[2] = 1; 
+  if (reg_depth != NULL) {
+    /*!!!  assuming c^depth  */
+    double lam_nx = reg_depth->apply(1, depth); 
+    if (lam_nx == 0) {
+      coeff[0] = 0; 
+    }
+    else {
+      double lam_c = reg_depth->apply(1, depth+1); 
+      coeff[0] = 1; 
+      coeff[1] = lam_c / lam_nx; 
+      coeff[2] = coeff[1]; 
+    }
+  }
+  coeff[coeff_sum_index] = coeff[0]+coeff[1]+coeff[2]; 
+}
+
+/*--------------------------------------------------------*/
+/*--------------------------------------------------------*/
+void AzReg_TsrOpt::show(const AzOut &out, 
+                    const char *header, 
+                    const AzRegDepth *reg_depth, 
+                    int focus_nx, 
+					const AzDataArray<AzDvect> *a
