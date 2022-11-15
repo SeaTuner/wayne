@@ -72,4 +72,48 @@ double AzRgf_FindSplit_Dflt::getBestGain(double wsum,  /* some of data weights *
 }
 
 /*--------------------------------------------------------*/
-/*--------------------------------
+/*--------------------------------------------------------*/
+void AzRgf_FindSplit_Dflt::resetParam(AzParam &p)
+{
+  /*---  reg param shared with optimizer  ---*/
+  p.vFloat(kw_lambda, &lambda); 
+  p.vFloat(kw_sigma, &sigma); 
+
+  /*---  override ... ---*/
+  p.vFloat(kw_s_lambda, &lambda); 
+  p.vFloat(kw_s_sigma, &sigma); 
+
+  if (lambda < 0) {
+    throw new AzException(AzInputMissing, "AzRgf_FindSplit_Dflt", 
+               kw_lambda, "must be non-negative"); 
+  }
+  if (sigma < 0) {
+    throw new AzException(AzInputNotValid, "AzRgf_FindSplit_Dflt", 
+               kw_sigma, "must be non-negative"); 
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzRgf_FindSplit_Dflt::printParam(const AzOut &out) const
+{
+  if (out.isNull()) return; 
+
+  AzPrint o(out); 
+  o.reset_options(); 
+  o.set_precision(5); 
+  o.ppBegin("AzRgf_FindSplit_Dflt", "Node split", ", "); 
+  o.printV(kw_lambda, lambda); 
+  o.printV_posiOnly(kw_sigma, sigma); 
+  o.ppEnd(); 
+}
+
+/*--------------------------------------------------------*/
+void AzRgf_FindSplit_Dflt::printHelp(AzHelp &h) const
+{
+  h.begin(Azsplit_config, "AzRgf_FindSplit_Dflt", "Regularization at node split"); 
+  h.item_required(kw_lambda, help_lambda);  
+  h.item_experimental(kw_sigma, help_sigma, sigma_dflt); 
+  h.item(kw_s_lambda, help_s_lambda);  
+  h.item_experimental(kw_s_sigma, help_s_sigma); 
+  h.end(); 
+}
