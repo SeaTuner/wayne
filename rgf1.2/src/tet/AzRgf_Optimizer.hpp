@@ -50,4 +50,42 @@ public:
   virtual void warm_start(AzLossType loss_type, 
              const AzDataForTrTree *training_data, /*!< training data */
              const AzRegDepth *reg_depth, /*!< regularizer using tree attributes */
-             A
+             AzParam &param,  /*!< confignuration */
+             const AzDvect *v_y, /*!< training targets */
+             const AzDvect *v_fixed_dw, /* user-assigned data point weights */
+             const AzOut out,    /*!< where to wrige log */
+             /*---  for warm start  ---*/
+             const AzTrTreeEnsemble_ReadOnly *inp_ens, 
+             const AzDvect *inp_v_p)
+              = 0; 
+
+  /*! Optimize weights. */
+  virtual void
+  update(const AzDataForTrTree *data, /*!< training data */
+         AzRgfTreeEnsemble *ens, /*!< inout: tree ensmeble. */
+         /*---  output  ---*/
+         AzDvect *v_p) /*<! predictions on training data */
+         = 0;
+
+  /*! Test */
+  virtual void apply(const AzDataForTrTree *data, 
+             AzBmat *b_test_tran, /*!< inout */
+             const AzTrTreeEnsemble_ReadOnly *ens, 
+             /*---  output  ---*/
+             AzDvect *v_test_p, /*!< output: prediction on test data */
+             int *f_num, /*!< output: number of features including removed ones */
+             /*! output: number of features after consolidation and removing zero-weight ones */
+             int *nz_f_num)
+             const = 0;
+
+  /*! simulate end of the training and return the test results */
+  virtual void temp_update_apply(const AzDataForTrTree *tr_data, 
+                          AzRgfTreeEnsemble *temp_ens, 
+                          const AzDataForTrTree *test_data, 
+                          AzBmat *temp_b, AzDvect *v_test_p, 
+                          int *f_num, int *nz_f_num) const = 0; 
+
+  virtual void printHelp(AzHelp &h) const = 0; 
+}; 
+#endif 
+
