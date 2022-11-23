@@ -432,4 +432,174 @@ void AzRgforest::optimize_resetTarget()
 
   int tx; 
   for (tx = 0; tx < t_num; ++tx) {
-    ens->tree_u(tx)->removeSplitAssess
+    ens->tree_u(tx)->removeSplitAssessment(); /* since weights changed */  
+  }
+
+  isOpt = true; 
+
+  time_end(b_time, &opt_time); 
+}
+
+/* updates target and v_p */
+/*------------------------------------------------------------------*/
+void AzRgforest::_updateTarget_OtherLoss(const AzRgfTree *tree, 
+                                         const int leaf_nx[2], 
+                                         double w_inc)
+{
+  const double *y = target.y()->point(); 
+  double *p = v_p.point_u(); 
+
+  double *tar_dw = target.tarDw_forUpdate()->point_u(); 
+  double *dw = target.dw_forUpdate()->point_u(); 
+
+  int kx; 
+  for (kx = 0; kx < 2; ++kx) {
+    const AzTrTreeNode *np = tree->node(leaf_nx[kx]); 
+    int num = np->dxs_num; 
+    const int *dxs = np->data_indexes(); 
+    double new_w = np->weight; 
+    int ix; 
+    for (ix = 0; ix < num; ++ix) {
+      int dx = dxs[ix]; 
+
+      p[dx] += (new_w + w_inc); 
+
+      AzLosses o = AzLoss::getLosses(loss_type, p[dx], y[dx], py_adjust); 
+      dw[dx] = o.loss2; 
+      tar_dw[dx] = o._loss1;  
+    }
+  }
+}
+
+/*------------------------------------------------------------------*/
+/* static */
+//! _updataeTarget_OtherLoss could be called for LS too.  
+//  But perhaps this is faster.    
+void AzRgforest::_updateTarget_LS(const AzRgfTree *tree, 
+                                  const int leaf_nx[2], 
+                                  double w_inc, 
+                                  AzTrTtarget *target, /* updated */
+                                  AzDvect *v_p)        /* updated */
+{
+  double *r = target->tarDw_forUpdate()->point_u(); 
+  double *p = v_p->point_u(); 
+
+  int kx; 
+  for (kx = 0; kx < 2; ++kx) {
+    const AzTrTreeNode *np = tree->node(leaf_nx[kx]); 
+    int num = np->dxs_num; 
+    const int *dxs = np->data_indexes(); 
+    double new_w = np->weight; 
+    int ix; 
+    for (ix = 0; ix < num; ++ix) {
+      int dx = dxs[ix]; 
+      p[dx] += new_w; 
+      r[dx] -= new_w; 
+      if (w_inc != 0) {
+        p[dx] += w_inc; 
+        r[dx] -= w_inc; 
+      }
+    }
+  }
+}
+
+/* Input: y, p */
+/* Output: tar, dw, loss */
+/*------------------------------------------------------------------*/
+void AzRgforest::resetTarget()
+{
+  if (loss_type == AzLoss_Square) {
+    target.resetTarDw_residual(&v_p); 
+    return; 
+  }
+
+  AzDvect *v_tar_dw = target.tarDw_forUpdate();  /* tar*dw */
+  AzDvect *v_dw = target.dw_forUpdate(); 
+
+  /*---  train for -L'/L''  ---*/
+  lam_scale = 
+  AzLoss::negativeDeriv12(loss_type, &v_p, target.y(), NULL, 
+                          &py_adjust, 
+                          v_tar_dw, /* -L' */
+                          v_dw);  /* L'' */
+
+  if (!out.isNull() && AzLoss::isExpoFamily(loss_type)) {
+    show_forExpoFamily(v_dw); 
+  }
+}
+
+/*-------------------------------------------------------------------*/
+/* print to stdout only when Dump is specified */
+void AzRgforest::show_forExpoFamily(const AzDvect *v_dw) const
+{
+  if (dmp_out.isNull()) return; 
+  if (out.isNull()) return; 
+  double w_sum = v_dw->sum(); 
+  double max_w = v_dw->max(); 
+  double min_w = v_dw->min(); 
+  AzPrint o(out); 
+  o.reset_options(); 
+  o.printBegin("resetTarget", ","); 
+  o.printV("wsum=", w_sum); o.printV("maxw=", max_w); o.printV("minw=", min_w); 
+  o.printV("py_adj=", py_adjust); o.printV("lam_scale=", lam_scale); 
+  o.printEnd(); 
+}
+
+/*-------------------------------------------------------------------*/
+void 
+AzRgforest::apply(AzTETrainer_TestData *td, 
+                  AzDvect *v_test_p, 
+                  AzTE_ModelInfo *info, /* may be NULL */
+                  AzTreeEnsemble *out_ens) /* may be NULL */
+ const 
+{
+  const AzDataForTrTree *test_data = AzTETrainer::_data(td); 
+  int f_num = -1, nz_f_num = -1; 
+  AzBmat *b_test_tran = AzTETrainer::_b(td); 
+  if (!isOpt) { /* weights have not been corrected */
+    AzTimeLog::print("Testing (branch-off for end-of-training optimization)", out); 
+    AzBmat temp_b(b_test_tran); 
+    temp_apply_copy_to(out_ens, test_data, &temp_b, v_test_p,  
+                       &f_num, &nz_f_num); 
+  }
+  else {
+    AzTimeLog::print("Testing ... ", out); 
+    opt->apply(test_data, b_test_tran, ens, v_test_p, /* prediction */
+               &f_num, &nz_f_num);    /*info */
+    if (out_ens != NULL) {
+      ens->copy_to(out_ens, s_config.c_str(), signature()); 
+    }
+  }
+
+  /*---  info  ---*/
+  if (info != NULL) {
+    info->leaf_num = l_num; 
+    info->tree_num = ens->size(); 
+    info->f_num = f_num; 
+    info->nz_f_num = nz_f_num; 
+    info->s_sign.reset(signature()); 
+    info->s_config.reset(&s_config); 
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzRgforest::copy_to(AzTreeEnsemble *out_ens) const 
+{
+  if (isOpt) {
+    ens->copy_to(out_ens, s_config.c_str(), signature()); 
+  }
+  else {
+    AzTimeLog::print(" ... branch off for end-of-training optimization ...", out); 
+    temp_apply_copy_to(out_ens, NULL, NULL, NULL, NULL, NULL); 
+  }
+}
+
+/*--------------------------------------------------------*/
+int AzRgforest::adjustTestInterval(int lnum_inc_test, int lnum_inc_opt) 
+{
+  int org_lnum_inc_test = lnum_inc_test; 
+  if (s_temp_for_trees.length() > 0 && 
+      lnum_inc_test < lnum_inc_opt) {
+    AzPrint::writeln(out, "Warning: test interval must not be smaller than optimization interval when the following is specified: ", kw_temp_for_trees); 
+    lnum_inc_test = lnum_inc_opt; 
+  }
