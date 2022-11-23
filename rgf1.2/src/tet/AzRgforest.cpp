@@ -603,3 +603,157 @@ int AzRgforest::adjustTestInterval(int lnum_inc_test, int lnum_inc_opt)
     AzPrint::writeln(out, "Warning: test interval must not be smaller than optimization interval when the following is specified: ", kw_temp_for_trees); 
     lnum_inc_test = lnum_inc_opt; 
   }
+  else if (lnum_inc_test > lnum_inc_opt) {
+    lnum_inc_test = (lnum_inc_test+lnum_inc_opt/2)/lnum_inc_opt*lnum_inc_opt; 
+  }
+  else if (lnum_inc_opt % lnum_inc_test != 0) {
+    int div = lnum_inc_opt / lnum_inc_test; 
+    for ( ; ; --div) {
+      if (lnum_inc_opt % div == 0) {
+        lnum_inc_test = lnum_inc_opt / div; 
+        break; 
+      }
+    }
+  }
+  if (org_lnum_inc_test != lnum_inc_test) {
+    AzBytArr s("Changing test interval: "); 
+    s.cn(org_lnum_inc_test); s.c("->"); s.cn(lnum_inc_test); 
+    AzPrint::writeln(out, s); 
+  }
+  return lnum_inc_test; 
+}
+
+/*--------------------------------------------------------*/
+/*--------------------------------------------------------*/
+int AzRgforest::resetParam(AzParam &p)
+{
+  const char *eyec = "AzRgforest::resetParam"; 
+
+  /*---  for storing data indexes in the trees to disk  ---*/
+  /*---  this must be called before adjustTestInterval. ---*/
+  p.vStr(kw_temp_for_trees, &s_temp_for_trees); 
+
+  /*---  loss function   ---*/
+//  p.vLoss(kw_loss, &loss_type); 
+  AzBytArr s_loss; 
+  p.vStr(kw_loss, &s_loss); 
+  if (s_loss.length() > 0) loss_type = AzLoss::lossType(s_loss.c_str()); 
+  
+  /*---  weight optimization interval  ---*/
+  int lnum_inc_opt = lnum_inc_opt_dflt; 
+  p.vInt(kw_lnum_inc_opt, &lnum_inc_opt); 
+  if (lnum_inc_opt <= 0) {
+    throw new AzException(AzInputNotValid, eyec, kw_lnum_inc_opt, 
+                          "must be positive"); 
+  }
+  opt_timer.reset(lnum_inc_opt); 
+
+  /*---  # of trees to search  ---*/
+  p.vInt(kw_s_tree_num, &s_tree_num); 
+  if (s_tree_num <= 0) {
+    throw new AzException(AzInputNotValid, eyec, kw_s_tree_num, 
+                          "must be positive"); 
+  }
+
+  /*---  when to stop: max #leaf, max #tree  ---*/
+  int max_tree_num = -1, max_lnum = max_lnum_dflt; 
+  p.vInt(kw_max_tree_num, &max_tree_num); 
+  p.vInt(kw_max_lnum, &max_lnum); 
+  if (max_tree_num <= 0) {
+    if (max_lnum > 0) max_tree_num = MAX(1, max_lnum / 2); 
+    else {
+      AzBytArr s("Specify "); s.c(kw_max_lnum); s.c(" and/or "); s.c(kw_max_tree_num); 
+      throw new AzException(AzInputMissing, eyec, s.c_str()); 
+    }
+  }
+  lmax_timer.reset(max_lnum); 
+
+  /*---  when to test: test interval  ---*/
+  int lnum_inc_test = lnum_inc_test_dflt; 
+  p.vInt(kw_lnum_inc_test, &lnum_inc_test); 
+  if (lnum_inc_test <= 0) {
+    throw new AzException(AzInputNotValid, eyec, kw_lnum_inc_test, 
+                          "must be positive"); 
+  }
+  lnum_inc_test = adjustTestInterval(lnum_inc_test, lnum_inc_opt); 
+
+  test_timer.reset(lnum_inc_test); 
+
+  /*---  memory handling  ---*/
+  p.vStr(kw_mem_policy, &s_mem_policy); 
+  if (s_mem_policy.length() <= 0)                     beTight = false; 
+  else if (s_mem_policy.compare(mp_beTight) == 0)     beTight = true; 
+  else if (s_mem_policy.compare(mp_not_beTight) == 0) beTight = false; 
+  else {
+    AzBytArr s(kw_mem_policy); s.c(" should be either ");
+    s.c(mp_beTight); s.c(" or "); s.c(mp_not_beTight); 
+    throw new AzException(AzInputNotValid, eyec, s.c_str()); 
+  }
+
+  p.vFloat(kw_f_ratio, &f_ratio); 
+  if (f_ratio > 1) {
+    throw new AzException(AzInputNotValid, kw_f_ratio, "must be between 0 and 1."); 
+  }
+  int random_seed = -1; 
+  if (f_ratio > 0 && f_ratio < 1) {
+    p.vInt(kw_random_seed, &random_seed); 
+    if (random_seed > 0) {
+      srand(random_seed); 
+    }
+  }
+
+  p.swOn(&doPassiveRoot, kw_doPassiveRoot); 
+
+  /*---  for maintenance purposes  ---*/
+  p.swOn(&doForceToRefreshAll, kw_doForceToRefreshAll); 
+  p.swOn(&beVerbose, kw_forest_beVerbose); /* for compatibility */
+  p.swOn(&beVerbose, kw_beVerbose); 
+  p.swOn(&doTime, kw_doTime); 
+
+  /*---  display parameters  ---*/
+  if (!out.isNull()) {
+    AzPrint o(out); 
+    o.ppBegin("AzRgforest", "Forest-level"); 
+//    o.printLoss(kw_loss, loss_type); 
+    o.printV(kw_loss, AzLoss::lossName(loss_type)); 
+    o.printV(kw_max_lnum, max_lnum); 
+    o.printV(kw_max_tree_num, max_tree_num); 
+    o.printV(kw_lnum_inc_opt, lnum_inc_opt); 
+    o.printV(kw_lnum_inc_test, lnum_inc_test); 
+    o.printV(kw_s_tree_num, s_tree_num); 
+    o.printSw(kw_doForceToRefreshAll, doForceToRefreshAll); 
+    o.printSw(kw_beVerbose, beVerbose); 
+    o.printSw(kw_doTime, doTime); 
+    o.printV_if_not_empty(kw_mem_policy, s_mem_policy); 
+    o.printV_if_not_empty(kw_temp_for_trees, &s_temp_for_trees); 
+    o.printV(kw_f_ratio, f_ratio); 
+    o.printV(kw_random_seed, random_seed); 
+    o.printSw(kw_doPassiveRoot, doPassiveRoot); 
+    o.ppEnd(); 
+  }
+
+  if (loss_type == AzLoss_None) {
+    throw new AzException(AzInputNotValid, eyec, kw_loss); 
+  }
+
+  return max_tree_num; 
+}
+ 
+/*------------------------------------------------*/
+void AzRgforest::printHelp(AzHelp &h) const
+{
+  fs->printHelp(h); 
+
+  h.begin(Azforest_config, "AzRgforest", "Forest-wide control"); 
+  h.item(kw_loss, help_loss, AzLoss::lossName(loss_type_dflt)); 
+  AzDataPool<AzBytArr> pool_desc; 
+  AzLoss::help_lines(h.getLevel(), &pool_desc); 
+  int ix; 
+  for (ix = 0; ix < pool_desc.size(); ++ix) {
+    h.writeln_desc(pool_desc.point(ix)->c_str()); 
+  }
+  h.item(kw_max_lnum, help_max_lnum, max_lnum_dflt); 
+  h.item_experimental(kw_max_tree_num, help_max_tree_num, "Don't care"); 
+  h.item(kw_lnum_inc_opt, help_lnum_inc_opt, lnum_inc_opt_dflt); 
+  h.item(kw_lnum_inc_test, help_lnum_inc_test, lnum_inc_test_dflt); 
+  h.item(kw_s_tree_num, help_s_tree_num, s_tree_num_dflt
