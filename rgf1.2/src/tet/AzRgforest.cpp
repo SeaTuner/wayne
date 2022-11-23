@@ -248,4 +248,188 @@ void AzRgforest::time_show()
     my_out.activate(); 
     if (my_out.isNull()) return; 
     AzPrint o(my_out); 
-    o.printBegin("", "
+    o.printBegin("", ", ", "="); 
+    o.print("search_time", (double)(search_time/(double)CLOCKS_PER_SEC)); 
+    o.print("opt_time", (double)(opt_time/(double)CLOCKS_PER_SEC)); 
+    o.printEnd(); 
+  }
+}
+
+/*------------------------------------------------------------------*/
+bool AzRgforest::growForest()
+{
+  clock_t b_time; 
+  time_begin(&b_time); 
+
+  /*---  find the best split  ---*/
+  AzTrTsplit best_split; 
+  searchBestSplit(&best_split);                    
+  if (shouldExit(&best_split)) { /* exit if no more split */
+    return true; /* exit */
+  }
+
+  /*---  split the node  ---*/
+  double w_inc; 
+  int leaf_nx[2] = {-1,-1}; 
+  const AzRgfTree *tree = splitNode(&best_split, &w_inc, leaf_nx); 
+
+  if (lmax_timer.reachedMax(l_num, "AzRgforest: #leaf", out)) { 
+    return true; /* #leaf reached max; exit */
+  }
+
+  /*---  update target  ---*/
+  updateTarget(tree, leaf_nx, w_inc); 
+
+  time_end(b_time, &search_time); 
+  return false; /* don't exit */
+}
+
+/* changes: isOpt, l_num */
+/*------------------------------------------------------------------*/
+const AzRgfTree *AzRgforest::splitNode(AzTrTsplit *best_split, /* (tx,nx) may be updated */
+                             /*---  output  ---*/
+                             double *w_inc, 
+                             int leaf_nx[2])
+{                             
+  bool isNewTree = false; 
+  AzRgfTree *tree = tree_to_grow(best_split->tx, best_split->nx, &isNewTree); 
+  double old_w = tree->node(best_split->nx)->weight; 
+  tree->splitNode(data, best_split); 
+  double new_w = tree->node(best_split->nx)->weight; 
+  isOpt = false; 
+
+  ++l_num; /* if it wasn't root, one leaf was removed and two leaves were added */
+  if (best_split->nx == tree->root()) {
+    ++l_num; 
+  }
+
+  *w_inc = new_w - old_w; 
+
+  leaf_nx[0] = tree->node(best_split->nx)->le_nx; 
+  leaf_nx[1] = tree->node(best_split->nx)->gt_nx; 
+
+  return tree; 
+}
+
+/*------------------------------------------------------------------*/
+bool AzRgforest::shouldExit(const AzTrTsplit *best_split) const
+{
+  /*---  exit criteria  ---*/
+  if (best_split->tx < 0 || best_split->fx < 0) {
+    AzTimeLog::print("AzRgforest::shouldExit, No more split", out); 
+    return true; 
+  }
+  
+  if (best_split->tx == rootonly_tx && 
+      ens->isFull()) {
+    AzTimeLog::print("AzRgforest::shouldExit, #tree reached max ... ", out); 
+    return true; 
+  }
+  return false; 
+}
+
+/*------------------------------------------------------------------*/
+void AzRgforest::searchBestSplit(AzTrTsplit *best_split) /* must be initialize by caller */
+{
+  bool doRefreshAll = false; 
+  if (doForceToRefreshAll) { /* this option is for testing the code */
+    doRefreshAll = true; 
+  }
+  if (s_tree_num > 1) {
+    doRefreshAll = true; 
+  }
+
+  int last_tx = ens->lastIndex(); 
+
+  /*---  decide which trees should be searched  ---*/
+  int my_first = MAX(0, last_tx + 1 - s_tree_num); 
+  if (my_first-1 >= 0) { 
+    /* 
+     * since tree[my_first-1] will never be searched again, release some memory. 
+     * split info may've been already removed, but that's okay 
+     */
+    ens->tree_u(my_first-1)->releaseWork();
+  }
+
+  /*---  search!  ---*/
+  double nn = data->dataNum(); 
+  const AzTrTtarget *tar = &target; 
+  AzTrTtarget my_tar; 
+  if (target.isWeighted()) {
+    my_tar.reset(&target);
+    my_tar.weight_tarDw(); 
+    my_tar.weight_dw(); 
+    nn = target.sum_fixed_dw(); 
+    tar = &my_tar; 
+  }
+
+  if (f_pick > 0) {
+    fs->pickFeats(f_pick, data->featNum()); 
+  }
+
+  AzRgf_FindSplit_input input(-1, data, tar, lam_scale, nn); 
+  int tx; 
+  for (tx = my_first; tx <= last_tx; ++tx) {
+    input.tx = tx; 
+    ens->tree_u(tx)->findSplit(fs, input, doRefreshAll, best_split);
+  }
+  /*---  rootonly tree  ---*/
+  if (!doPassiveRoot || 
+      best_split->tx < 0 || best_split->fx < 0) {
+    input.tx = rootonly_tx; 
+    rootonly_tree->findSplit(fs, input, doRefreshAll, best_split); 
+  }
+}
+
+/*------------------------------------------------------------------*/
+/* print this to stdout only when Dump is specified */
+void AzRgforest::show_tree_info() const
+{
+  if (dmp_out.isNull()) return; 
+  if (out.isNull()) return; 
+  int t_num = ens->size(); 
+  double max_max_depth = 0, avg_max_depth = 0; 
+  double max_size = 0, avg_size = 0; 
+  int tx; 
+  for (tx = 0; tx < t_num; ++tx) {
+    const AzTrTree_ReadOnly *tree = ens->tree(tx); 
+    int max_depth = tree->maxDepth(); 
+    max_max_depth = MAX(max_max_depth, max_depth); 
+    avg_max_depth += max_depth; 
+    int tree_size = tree->leafNum(); 
+    max_size = MAX(max_size, tree_size); 
+    avg_size += tree_size; 
+  }
+  if (t_num > 0) {
+    avg_max_depth /= (double)t_num; 
+    avg_size /= (double)t_num; 
+  }
+
+  AzPrint o(out); 
+  o.printBegin("", ",", "="); 
+  o.print("#tree", t_num); 
+  o.print("max_depth-max,avg"); 
+  o.pair_inParen(max_max_depth, avg_max_depth, ","); 
+  o.print("#leaf-max,avg"); 
+  o.pair_inParen(max_size, avg_size, ",");  
+  o.printEnd(); 
+}
+
+/*------------------------------------------------------------------*/
+void AzRgforest::optimize_resetTarget()
+{
+  clock_t b_time; 
+  time_begin(&b_time); 
+
+  int t_num = ens->size(); 
+
+  AzBytArr s("Calling optimizer with "); 
+  s.cn(t_num); s.c(" trees and "); s.cn(l_num); s.c(" leaves"); 
+  AzTimeLog::print(s, out); 
+
+  opt->update(data, ens, &v_p); 
+  resetTarget(); 
+
+  int tx; 
+  for (tx = 0; tx < t_num; ++tx) {
+    ens->tree_u(tx)->removeSplitAssess
