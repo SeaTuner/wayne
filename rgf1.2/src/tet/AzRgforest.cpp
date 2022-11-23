@@ -756,4 +756,20 @@ void AzRgforest::printHelp(AzHelp &h) const
   h.item_experimental(kw_max_tree_num, help_max_tree_num, "Don't care"); 
   h.item(kw_lnum_inc_opt, help_lnum_inc_opt, lnum_inc_opt_dflt); 
   h.item(kw_lnum_inc_test, help_lnum_inc_test, lnum_inc_test_dflt); 
-  h.item(kw_s_tree_num, help_s_tree_num, s_tree_num_dflt
+  h.item(kw_s_tree_num, help_s_tree_num, s_tree_num_dflt);
+
+  h.item_experimental(kw_temp_for_trees, help_temp_for_trees); 
+  h.item_experimental(kw_f_ratio, help_f_ratio); 
+  h.item_experimental(kw_doPassiveRoot, help_doPassiveRoot); 
+  h.end(); 
+
+  reg_depth->printHelp(h);  
+  opt->printHelp(h); 
+  ens->printHelp(h); 
+
+  h.begin(Azforest_config, "AzRgforest", "Info display"); 
+  h.item(kw_doTime, help_doTime); 
+  h.item(kw_beVerbose, help_beVerbose); 
+  h.item(kw_mem_policy, help_mem_policy, mp_not_beTight); 
+  h.end();
+}
