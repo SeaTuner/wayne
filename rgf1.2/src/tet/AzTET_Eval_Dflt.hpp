@@ -104,4 +104,56 @@ public:
     o.printBegin("", ",", ","); 
     o.print("#tree", info->tree_num); 
     o.print("#leaf", info->leaf_num); 
-    o.print("acc", result
+    o.print("acc", result.acc, 4); 
+    o.print("rmse", result.rmse, 4); 
+    o.print("sqerr", result.rmse*result.rmse, 6); 
+    o.print(loss_str[loss_type]); 
+    o.print("loss", result.loss, 6); 
+    o.print("#test", v_p->rowNum()); 
+    o.print("cfg"); /* for compatibility */
+    o.print(s_sign_config); 
+    if (user_str != NULL) {
+      o.print(user_str); 
+    }
+    o.printEnd();
+  }
+
+protected:
+  virtual void _begin(const char *config, AzLossType inp_loss_type) {
+    s_config.reset(config); 
+    loss_type = inp_loss_type; 
+
+    if (ofs.is_open()) {
+      ofs.close(); 
+    }
+    const char *perf_fn = s_perf_fn.c_str(); 
+    if (AzTools::isSpecified(perf_fn)) {
+      ios_base::openmode mode = ios_base::out; 
+      if (doAppend) {
+        mode = ios_base::app | ios_base::out; 
+      }
+      ofs.open(perf_fn, mode); 
+      ofs.set_to(perf_out); 
+    }
+    else {
+      perf_out.setStdout(); 
+    }
+  }
+
+  virtual void _clean(AzBytArr *s) const {
+    /*--  replace comma with : for convenience later --*/
+    s->replace(',', ';'); 
+  }
+
+  virtual void concat_config(const AzTE_ModelInfo *info, AzBytArr *s) const {
+    if (s_config.length() > 0) {
+      s->concat(&s_config); 
+    }
+    else {
+      AzBytArr s_cfg(&info->s_config); 
+      _clean(&s_cfg); 
+      s->concat(&s_cfg); 
+    }
+  }
+}; 
+#endif 
