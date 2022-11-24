@@ -107,4 +107,174 @@ public:
                               double border_val, 
                               /*---  output  ---*/
                               AzIntArr *ia_le_dx, 
-                         
+                              AzIntArr *ia_gt_dx) const; 
+
+  static void separate(AzSortedFeat_Dense *base, /* indexes will be swaped */
+                       const AzSortedFeat_Dense *inp, 
+                       const AzIntArr *isYes, 
+                       int yes_num, 
+                       AzSortedFeat_Dense *yes, 
+                       AzSortedFeat_Dense *no); 
+
+protected:
+  void copy_base(const AzSortedFeat_Dense *inp); 
+
+  static void separate_indexes(int *index, 
+                           int index_num, 
+                           const int *isYes, 
+                           int yes_num, 
+                           int max_dx); 
+}; 
+
+
+//! Data points sorted by feature values.  
+class AzSortedFeat_Sparse : public virtual AzSortedFeat
+{
+protected:
+  AzIntArr ia_zero; /* may not be set if unnecessary */
+  AzIntArr ia_index; 
+  AzDvect v_value; 
+  bool _shouldDoBackward; 
+  int data_num; 
+
+public:
+  AzSortedFeat_Sparse() : _shouldDoBackward(false), data_num(0) {}
+  AzSortedFeat_Sparse(const AzSvect *v_data_transpose, 
+               const AzIntArr *ia_dx) /* must be sorted */ 
+                        : _shouldDoBackward(false), data_num(0) {
+    reset(v_data_transpose, ia_dx); 
+  }
+  AzSortedFeat_Sparse(const AzSortedFeat_Sparse *inp,  /* must not be NULL */
+               const AzIntArr *ia_isYes,    
+               int yes_num) 
+                        : _shouldDoBackward(false), data_num(0) {
+    filter(inp, ia_isYes, yes_num); 
+  }
+  AzSortedFeat_Sparse(const AzSortedFeat_Sparse *inp) 
+                        : _shouldDoBackward(false), data_num(0) {
+    copy(inp); 
+  }
+
+
+  inline int dataNum() const {
+    return data_num; 
+  }
+
+  void reset(const AzSvect *v_data_transpose, const AzIntArr *ia_dx); 
+  void filter(const AzSortedFeat_Sparse *inp,  /* may be NULL */
+              const AzIntArr *ia_isYes, 
+              int yes_num); 
+
+  inline void rewind(AzCursor &cur) const {
+    if (_shouldDoBackward) {
+      cur.set(ia_index.size()); 
+    }
+    else {
+      cur.set(0); 
+    }
+  }
+  inline const int *next(AzCursor &cur, double *out_val, int *out_num) const {
+    if (_shouldDoBackward) {
+      return backward(cur, out_val, out_num); 
+    }
+    else {
+      return forward(cur, out_val, out_num); 
+    }
+  }
+
+  inline bool isForward() const {
+    return !_shouldDoBackward; 
+  }
+
+  AzSortedFeat_Sparse & operator =(const AzSortedFeat_Sparse &inp) { /* never tested */
+    if (this == &inp) return *this; 
+    ia_zero.reset(&inp.ia_zero); 
+    ia_index.reset(&inp.ia_index); 
+    v_value.set(&inp.v_value); 
+    _shouldDoBackward = inp._shouldDoBackward; 
+    data_num = inp.data_num; 
+    return *this; 
+  }
+
+  void getIndexes(const int *inp_dxs, int inp_dxs_num, 
+                              double border_val, 
+                              /*---  output  ---*/
+                              AzIntArr *ia_le_dx, 
+                              AzIntArr *ia_gt_dx) const; 
+
+  static void separate(const AzSortedFeat_Sparse *inp, 
+                          const AzIntArr *isYes, 
+                          int yes_num, 
+                          AzSortedFeat_Sparse *yes, 
+                          AzSortedFeat_Sparse *no); 
+
+protected:
+  void copy(const AzSortedFeat_Sparse *inp); 
+  static void sub_initialize(const AzSortedFeat_Sparse *inp, 
+                                 int num, 
+                                 AzSortedFeat_Sparse *ptr); 
+  static void sub_terminate(AzSortedFeat_Sparse *ptr, 
+                            int num, 
+                            int where_is_zero); 
+  const AzIntArr *getIndexes_Zero(const int *inp_dxs, int inp_dxs_num,  
+                                  AzIntArr *out_ia_zero) const; 
+
+  const int *forward(AzCursor &cur, double *out_val, int *out_num) const; 
+  const int *backward(AzCursor &cur, double *out_val, int *out_num) const; 
+}; 
+
+
+class AzSortedFeatWork {
+public:
+  AzSortedFeat_Sparse tmps; 
+  AzSortedFeat_Dense tmpd; 
+}; 
+
+class AzSortedFeatArr { 
+protected:
+  AzSortedFeat_Sparse **arrs; 
+  AzSortedFeat_Dense **arrd; 
+  AzObjPtrArray<AzSortedFeat_Sparse> a_sparse; 
+  AzObjPtrArray<AzSortedFeat_Dense> a_dense; 
+  int f_num; 
+  bool beTight; 
+
+  /*---  used only when beTight = true  ---*/
+  AzIntArr ia_isActive; 
+  int active_num; 
+
+public: 
+  AzSortedFeatArr() : arrs(NULL), arrd(NULL), f_num(0), beTight(false) {}
+  AzSortedFeatArr(const AzSortedFeatArr *inp)
+                    : arrs(NULL), arrd(NULL), f_num(0), beTight(false) {
+    copy_base(inp); 
+  }
+  AzSortedFeatArr(const AzSortedFeatArr *inp, const int *dxs, int dxs_num) 
+                    : arrs(NULL), arrd(NULL), f_num(0), beTight(false) {
+    filter_base(inp, dxs, dxs_num); 
+  }
+  void reset_sparse(const AzSmat *m_tran, 
+                    bool beTight=false); 
+  void reset_dense(const AzDmat *m_tran_dense, 
+                   bool inp_beTight=false); 
+
+  inline bool doingSparse() const {
+    if (arrs != NULL) return true; 
+    else              return false; 
+  }
+  inline int featNum() const {
+    return f_num; 
+  }
+  inline const AzSortedFeat *sorted(int fx) const {
+    if (fx < 0 || fx >= f_num) {
+      throw new AzException("AzSortedFeatArr::sorted", "out of range"); 
+    }
+    if (arrd != NULL) {
+      return arrd[fx]; 
+    }
+    if (arrs != NULL) {
+      return arrs[fx]; 
+    }
+    return NULL; 
+  }
+  co
