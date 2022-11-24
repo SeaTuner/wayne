@@ -277,4 +277,31 @@ public:
     }
     return NULL; 
   }
-  co
+  const AzSortedFeat *sorted(const AzSortedFeatArr *inp, 
+              int fx, 
+              AzSortedFeatWork *out) const; 
+
+  void reset() {
+    a_dense.free(&arrd); 
+    a_sparse.free(&arrs); 
+    f_num = 0; 
+    ia_isActive.reset(); 
+    active_num = 0;   
+  }
+
+  static void separate(AzSortedFeatArr *base, 
+             const AzSortedFeatArr *inp, 
+             const int *yes_dxs, int yes_dxs_num, 
+             const int *no_dxs, int no_dxs_num, 
+             AzSortedFeatArr *yes, AzSortedFeatArr *no); 
+
+  void copy_base(const AzSortedFeatArr *inp); 
+  void filter_base(const AzSortedFeatArr *inp, const int *dxs, int dxs_num); 
+
+protected:
+  static void sub_initialize(const AzSortedFeatArr *inp, 
+                      AzSortedFeatArr *ptr); 
+}; 
+
+#endif 
+
