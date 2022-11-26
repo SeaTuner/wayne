@@ -221,4 +221,170 @@ void AzTETproc::train_predict(const AzOut &out,
     AzTreeEnsemble ens; 
     AzDvect v_p; 
     AzTE_ModelInfo info; 
-    trainer->apply(&t
+    trainer->apply(&td, &v_p, &info, &ens); 
+
+    writePrediction(model_fn_prefix, &v_p, seq_no, pred_fn_suffix, out); 
+    writeModelInfo(model_fn_prefix, seq_no, info_fn_suffix, &info, out); 
+
+    if (ret == AzTETrainer_Ret_Exit || 
+        !doSaveLastModelOnly) {
+      writeModel(&ens, seq_no, model_fn_prefix, NULL, &s_model_names, out); 
+      ++model_num; 
+    }
+    if (ret == AzTETrainer_Ret_Exit) {
+      break;   
+    }
+    ++seq_no; 
+  }
+  end_of_saving_models(model_num, s_model_names, "", out); 
+}
+
+/*------------------------------------------------------------------*/
+void AzTETproc::train_predict2(const AzOut &out, 
+                        AzTETrainer *trainer, 
+                        const char *config, 
+                        AzSmat *m_train_x, 
+                        AzDvect *v_train_y, 
+                        const AzSvFeatInfo *featInfo,
+                        bool doSaveLastModelOnly, 
+                        /*---  for prediction  ---*/
+                        AzSmat *m_test_x, 
+                        const char *model_fn_prefix, 
+                        const char *pred_fn_suffix,
+                        const char *info_fn_suffix,
+                        /*---  data point weights  ---*/
+                        AzDvect *v_fixed_dw, /* may be NULL */
+                        /*---  for warm start  ---*/
+                        AzTreeEnsemble *inp_ens) /* may be NULL */
+{
+  AzTimeLog::print("train_predict2 ... ", log_out); 
+  int model_num = 0; 
+  AzBytArr s_model_names; 
+  trainer->startup(out, config, m_train_x, v_train_y, featInfo, v_fixed_dw, inp_ens); 
+  int seq_no = 1; 
+  for ( ; ; ) {
+    /*---  proceed with training  ---*/
+    AzTETrainer_Ret ret = trainer->proceed_until(); 
+
+    AzTreeEnsemble ens; 
+    trainer->copy_to(&ens); 
+    AzDvect v_p; 
+    ens.apply(m_test_x, &v_p);  
+    AzTE_ModelInfo info; 
+    ens.info(&info); 
+
+    writePrediction(model_fn_prefix, &v_p, seq_no, pred_fn_suffix, out); 
+    writeModelInfo(model_fn_prefix, seq_no, info_fn_suffix, &info, out); 
+
+    if (ret == AzTETrainer_Ret_Exit || 
+        !doSaveLastModelOnly) {
+      writeModel(&ens, seq_no, model_fn_prefix, NULL, &s_model_names, out); 
+      ++model_num; 
+    }
+    if (ret == AzTETrainer_Ret_Exit) {
+      break;   
+    }
+    ++seq_no; 
+  }
+  end_of_saving_models(model_num, s_model_names, "", out); 
+}
+
+/*------------------------------------------------------------------*/
+void AzTETproc::writePrediction(
+                           const char *fn_stem, 
+                           const AzDvect *v_p, 
+                           int seq_no, 
+                           const char *pred_suffix, 
+                           const AzOut &out)
+{
+  AzTimeLog::print("Writing prediction: seq#=", seq_no, out); 
+
+  AzBytArr s_fn; 
+  gen_model_fn(fn_stem, seq_no, &s_fn); 
+  AzBytArr s_pfn; 
+  s_pfn.concat(&s_fn); s_pfn.concat(pred_suffix); 
+  if (s_pfn.compare(&s_fn) == 0) {
+    throw new AzException(AzInputError, "AzTETproc::writePrediction", 
+                          "No suffix for prediction filenames is given"); 
+  }
+
+  writePrediction(s_pfn.c_str(), v_p); 
+}
+
+/*------------------------------------------------------------------*/
+void AzTETproc::writePrediction(const char *fn, 
+                                const AzDvect *v_p)
+{
+  /* one prediction value per line */
+  int width = 8; 
+  AzBytArr s; 
+  int dx; 
+  for (dx = 0; dx < v_p->rowNum(); ++dx) {
+    double val = v_p->get(dx); 
+    s.concatFloat(val, width); 
+    s.nl(); /* new line */
+  } 
+  AzFile file(fn); 
+  file.open("wb"); 
+  s.writeText(&file); 
+}
+
+/*------------------------------------------------------------------*/
+void AzTETproc::writeModelInfo(
+                           const char *fn_stem, 
+                           int seq_no, 
+                           const char *info_suffix, 
+                           const AzTE_ModelInfo *info, 
+                           const AzOut &out)
+{
+  AzBytArr s_fn; 
+  gen_model_fn(fn_stem, seq_no, &s_fn); 
+  AzBytArr s_ifn; 
+  s_ifn.concat(&s_fn); s_ifn.concat(info_suffix); 
+
+  writeModelInfo(s_ifn.c_str(), s_fn.c_str(), info, out); 
+}
+ 
+/*------------------------------------------------------------------*/
+void AzTETproc::writeModelInfo(const char *info_fn, 
+                           const char *model_fn, 
+                           const AzTE_ModelInfo *info, 
+                           const AzOut &out)
+{
+  AzTimeLog::print("Writing model info", out); 
+
+  AzBytArr s; 
+  /*---  info  ---*/
+  AzBytArr s_cfg(&info->s_config); 
+  s_cfg.replace(',', ';'); 
+
+  s.reset(); 
+  s.c("#tree,"); s.cn(info->tree_num); 
+  s.c(",#leaf,"); s.cn(info->leaf_num); 
+  s.c(",sign,"); s.c(&info->s_sign); 
+  s.c(",cfg,"); s.c(&s_cfg); 
+  s.c(","); s.c(model_fn); 
+  s.nl(); 
+
+  AzFile ifile(info_fn); 
+  ifile.open("wb"); 
+  s.writeText(&ifile); 
+  ifile.close(true); 
+}
+
+/*------------------------------------------------------------------*/
+void AzTETproc::xv(const AzOut &out, 
+                   int xv_num, 
+                   const char *xv_fn, 
+                   bool doShuffle, 
+                   AzTETrainer *trainer, 
+                   const char *config, 
+                   AzSmat *m_x, 
+                   AzDvect *v_y, 
+                   const AzSvFeatInfo *featInfo,
+                   /*---  data point weights  ---*/
+                   AzDvect *v_dw) /* may be NULL */
+{
+  const char *eyec = "AzTETproc::xv"; 
+
+  int n
