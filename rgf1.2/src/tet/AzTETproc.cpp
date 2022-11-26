@@ -387,4 +387,186 @@ void AzTETproc::xv(const AzOut &out,
 {
   const char *eyec = "AzTETproc::xv"; 
 
-  int n
+  int nn = m_x->colNum(); 
+  int each = nn / xv_num; 
+  int extra = nn % xv_num; 
+  AzIntArr ia_dxs; 
+  ia_dxs.range(0, nn); 
+  if (doShuffle) {
+    AzTools::shuffle(-1, &ia_dxs); 
+  }
+  const int *dxs = ia_dxs.point(); 
+
+  AzDataPool<AzPerfResult> perf; 
+
+  int bx = 0; 
+  int xx; 
+  for (xx = 0; xx < xv_num; ++xx) {
+    int ex = bx+each; 
+    if (extra > 0) {
+      ++ex; 
+      --extra; 
+    }
+    int tst_num = ex-bx; 
+    int trn_num = nn-tst_num; 
+ 
+    AzBytArr s("-----  "); s.cn(xx+1); s.c("/"); s.cn(xv_num); 
+    s.c(" #train: "); s.cn(trn_num); s.c(" #test: "); s.cn(tst_num); 
+    AzTimeLog::print(s, out); 
+   
+    AzSmat m_train_x(m_x->rowNum(), trn_num), m_test_x(m_x->rowNum(), tst_num); 
+    AzDvect v_train_y(trn_num), v_test_y(tst_num); 
+    AzDvect v_fixed_dw; 
+    if (!AzDvect::isNull(v_dw)) {
+      v_fixed_dw.reform(trn_num); 
+    }
+    int trn_col=0, tst_col=0; 
+	int ix; 
+    for (ix = 0; ix < nn; ++ix) {
+      if (ix >= bx && ix < ex) {
+        m_test_x.col_u(tst_col)->set(m_x->col(ix)); 
+        v_test_y.set(tst_col, v_y->get(ix)); 
+        ++tst_col; 
+      }
+      else {
+        m_train_x.col_u(trn_col)->set(m_x->col(ix)); 
+        v_train_y.set(trn_col, v_y->get(ix)); 
+        if (!AzDvect::isNull(v_dw)) {
+          v_fixed_dw.set(trn_col, v_dw->get(ix)); 
+        }
+        ++trn_col; 
+      }
+    }
+    if (trn_col != m_train_x.colNum() || tst_col != m_test_x.colNum()) {
+      throw new AzException(eyec, "dimension mismatch"); 
+    }    
+
+    /*---  ---*/
+    AzTETrainer_TestData td(out, &m_test_x); 
+    trainer->startup(out, config, &m_train_x, &v_train_y, featInfo, 
+                     &v_fixed_dw, NULL); 
+    int seq = 0; 
+    for ( ; ; ++seq) {
+      AzTETrainer_Ret ret = trainer->proceed_until(); 
+      AzDvect v_p; 
+      AzTE_ModelInfo info; 
+      trainer->apply(&td, &v_p, &info); 
+
+      AzPerfResult res = AzTaskTools::eval(&v_p, &v_test_y, trainer->lossType()); 
+      AzBytArr s("seq,");s.cn(seq+1);
+      s.c(",acc,");s.cn(res.acc,6);
+      s.c(",rmse,");s.cn(res.rmse,6); 
+      s.c(",loss,");s.cn(res.loss,6); 
+      s.c(",#leaf,"); s.cn(info.leaf_num); 
+      s.c(",#tree,"); s.cn(info.tree_num); 
+      AzPrint::writeln(out, s); 
+
+      res.multiply(1/(double)xv_num); 
+      if (xx == 0) {
+        *(perf.new_slot()) = res; 
+      }
+      else {
+        perf.point_u(seq)->add(&res); 
+      }
+
+      if (ret == AzTETrainer_Ret_Exit) {
+        break;   
+      }
+    }
+    if (xx > 0 && perf.size() != seq+1) {
+      throw new AzException(eyec, "the number of results is different?"); 
+    }
+  }
+
+  /*--- ---*/
+  AzFile file(xv_fn); 
+  file.open("wb"); 
+  AzBytArr s("seq  acc  rmse  loss\n"); 
+  s.writeText(&file);  
+  int ix; 
+  for (ix = 0; ix < perf.size(); ++ix) {
+    const AzPerfResult *res = perf.point(ix); 
+    s.reset(); 
+    s.cn(ix+1);s.c(" ");s.cn(res->acc,6);s.c(" ");s.cn(res->rmse,6);s.c(" "); 
+    s.cn(res->loss,6);s.nl(); 
+    s.writeText(&file); 
+  }
+  file.close(true); 
+}
+
+/*------------------------------------------------------------------*/
+void AzTETproc::features(const AzOut &out, 
+                      const AzTreeEnsemble *ens, 
+                      const AzSmat *m_x, 
+                      const char *out_fn, 
+                      int digits, 
+                      bool doSparse)
+{
+  AzSmat m;
+  ens_feats(out, ens, m_x, &m); 
+  m.writeText(out_fn, digits, doSparse); 
+}
+
+/*------------------------------------------------------------------*/
+void AzTETproc::ens_feats(
+                      const AzOut &out, 
+                      const AzTreeEnsemble *ens, 
+                      const AzSmat *m_x, 
+                      AzSmat *m_out, 
+                      int offs, 
+                      double value)
+{
+  const char *eyec = "AzTETproc::ens_feats"; 
+  if (ens->orgdim() != m_x->rowNum()) {
+    throw new AzException(AzInputError, eyec, "dimensionality mismatch"); 
+  }
+  int f_num = offs; 
+  AzIntPool ip; 
+  int tx; 
+  for (tx = 0; tx < ens->size(); ++tx) {
+    const AzTree *tree = ens->tree(tx); 
+    AzIntArr ia_nx2fx; 
+    ia_nx2fx.reset(tree->nodeNum(), -1); 
+    int nx; 
+    for (nx = 0; nx < tree->nodeNum(); ++nx) {
+      if (tree->node(nx)->weight != 0) {
+        ia_nx2fx.update(nx, f_num); 
+        ++f_num; 
+      }
+    }
+    ip.put(&ia_nx2fx); 
+  }
+
+  set_feat(m_x, ens, &ip, f_num, value, m_out); 
+}
+
+/*------------------------------------------------------------------*/
+void AzTETproc::set_feat(const AzSmat *m_x, 
+                     const AzTreeEnsemble *ens, 
+                     const AzIntPool *ip, 
+                     int f_num, 
+                     double value, 
+                     AzSmat *m_out) /* output */
+{
+  m_out->reform(f_num, m_x->colNum()); 
+  int dx; 
+  for (dx = 0; dx < m_x->colNum(); ++dx) {
+    AzDvect v(m_x->col(dx)); 
+    AzIFarr ifa; 
+    int tx; 
+    for (tx = 0; tx < ens->size(); ++tx) {
+      const int *nx2fx = ip->point(tx); 
+      AzIntArr ia_nodes; 
+      ens->tree(tx)->apply(&v, &ia_nodes); 
+      int ix; 
+      for (ix = 0; ix < ia_nodes.size(); ++ix) {
+        int nx = ia_nodes.get(ix); 
+        int fx = nx2fx[nx]; 
+        if (fx >= 0) {
+          ifa.put(fx, value); 
+        }
+      }
+    }
+    m_out->col_u(dx)->load(&ifa); 
+  }
+}
