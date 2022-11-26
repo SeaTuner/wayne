@@ -111,3 +111,81 @@ public:
                         AzDvect *v_fixed_dw, /* may be NULL */
                         /*---  for warm start  ---*/
                         AzTreeEnsemble *inp_ens); /* may be NULL */
+
+  static void features(const AzOut &out, 
+                      const AzTreeEnsemble *ens, 
+                      const AzSmat *m_x, 
+                      const char *out_fn, 
+                      int digits, 
+                      bool doSparse); 
+
+
+  static void gen_model_fn(const char *fn_stem, 
+                             int seq_no, 
+                             AzBytArr *s); /* output */
+
+  static void writePrediction(
+                           const char *fn_stem, 
+                           const AzDvect *v_p, 
+                           int seq_no, 
+                           const char *pred_suffix, 
+                           const AzOut &out); 
+  static void writePrediction(const char *fn, 
+                              const AzDvect *v_p); 
+  static void writeModelInfo(
+                           const char *fn_stem, 
+                           int seq_no, 
+                           const char *info_suffix, 
+                           const AzTE_ModelInfo *info, 
+                           const AzOut &out); 
+
+  static void writeModelInfo(const char *info_fn, 
+                           const char *model_fn, 
+                           const AzTE_ModelInfo *info, 
+                           const AzOut &out); 
+
+  static void xv(const AzOut &out, 
+                        int xv_num, 
+                        const char *xv_fn, 
+                        bool doShuffle, 
+                        AzTETrainer *trainer, 
+                        const char *config, 
+                        AzSmat *m_x, 
+                        AzDvect *v_y, 
+                        const AzSvFeatInfo *featInfo,
+                        /*---  data point weights  ---*/
+                        AzDvect *v_dw); /* may be NULL */
+
+protected:
+  static void writeModel(AzTreeEnsemble *ens, 
+                         int seq_no, 
+                         const char *fn_stem, 
+                         AzBytArr *s_model_fn, /* output */
+                         AzBytArr *s_model_names,  /* output */
+                         const AzOut &out); 
+  static void end_of_saving_models(int model_num, 
+                                   const AzBytArr &s_model_names, 
+                                   const char *out_model_names_fn, 
+                                   const AzOut &out); 
+  inline static bool isSpecified(const char *str) { 
+    if (str == NULL) return false; 
+    if (strlen(str) <= 0) return false; 
+    return true; 
+  }
+
+  static void ens_feats(
+                      const AzOut &out, 
+                      const AzTreeEnsemble *ens, 
+                      const AzSmat *m_x, 
+                      AzSmat *m_out, 
+                      int offs=0, 
+                      double value=1);
+  static void set_feat(const AzSmat *m_x, 
+                     const AzTreeEnsemble *ens, 
+                     const AzIntPool *ip, 
+                     int f_num, 
+                     double value, 
+                     AzSmat *m_out); /* output */
+}; 
+
+#endif
