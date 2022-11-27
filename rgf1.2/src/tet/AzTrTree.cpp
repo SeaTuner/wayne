@@ -188,4 +188,199 @@ void AzTrTree::_splitNode(const AzDataForTrTree *data,
                         const AzTrTsplit *inp, 
                         const AzOut &out)
 {
-  _checkNode(nx, "AzTrTree::sp
+  _checkNode(nx, "AzTrTree::splitNode"); 
+
+  nodes[nx].fx = inp->fx; 
+  nodes[nx].border_val = inp->border_val; 
+
+  AzIntArr ia_le, ia_gt; 
+  const AzSortedFeatArr *s_arr = sorted_arr[nx]; 
+  if (s_arr == NULL) {
+    if (nx == root_nx) {
+      s_arr = data->sorted_array(); 
+    }
+    else {
+      throw new AzException("AzTrTree::_splitNode", "sorted_arr[nx]=null"); 
+    }
+  }
+  const AzSortedFeat *sorted = s_arr->sorted(inp->fx); 
+  if (sorted == NULL) {
+    AzSortedFeatWork tmp; 
+    const AzSortedFeat *my_sorted = sorted_arr[nx]->sorted(data->sorted_array(), 
+                                    inp->fx, &tmp); 
+    my_sorted->getIndexes(nodes[nx].dxs, nodes[nx].dxs_num, inp->border_val, 
+                          &ia_le, &ia_gt); 
+  }
+  else {
+    sorted->getIndexes(nodes[nx].dxs, nodes[nx].dxs_num, inp->border_val, 
+                       &ia_le, &ia_gt); 
+  }
+
+  int le_offset = nodes[nx].dxs_offset; 
+  int gt_offset = le_offset + ia_le.size(); 
+
+  int le_nx = _newNode(max_size); 
+  nodes[nx].le_nx = le_nx; 
+  AzTrTreeNode *np = &nodes[le_nx]; 
+  np->depth = nodes[nx].depth + 1;
+  np->dxs_offset = le_offset; 
+  np->dxs = set_data_indexes(le_offset, ia_le.point(), ia_le.size()); 
+  np->dxs_num = ia_le.size(); 
+  np->parent_nx = nx; 
+  np->weight = inp->bestP[0]; 
+  if (curr_min_pop < 0 || np->dxs_num < curr_min_pop) curr_min_pop = np->dxs_num; 
+  curr_max_depth = MAX(curr_max_depth, np->depth); 
+
+  int gt_nx = _newNode(max_size);   
+  nodes[nx].gt_nx = gt_nx; 
+  np = &nodes[gt_nx]; 
+  np->depth = nodes[nx].depth + 1; 
+  np->dxs_offset = gt_offset; 
+  np->dxs = set_data_indexes(gt_offset, ia_gt.point(), ia_gt.size()); 
+  np->dxs_num = ia_gt.size(); 
+  np->parent_nx = nx; 
+  np->weight = inp->bestP[1]; 
+  curr_min_pop = MIN(curr_min_pop, np->dxs_num); 
+
+  /*------------------------------*/
+  double org_weight = nodes[nx].weight; 
+  if (!doUseInternalNodes) {
+    nodes[nx].weight = 0; 
+  }
+
+  /*------------------------------*/
+  dump_split(inp, nx, org_weight, out); 
+
+  /*---  release split info for the node we just split  ---*/
+  delete split[nx]; split[nx] = NULL; 
+}
+
+/*--------------------------------------------------------*/
+void AzTrTree::dump_split(const AzTrTsplit *inp, 
+                     int nx, 
+                     double org_weight, 
+                     const AzOut &out)
+{
+  if (out.isNull()) return; 
+
+  _checkNode(nx, "AzTrTree::dump_split"); 
+  int gt_nx = nodes[nx].gt_nx; 
+  int le_nx = nodes[nx].le_nx; 
+
+  AzPrint o(out); 
+  o.printBegin("", ", ", "="); 
+  if (inp->tx >= 0) {
+    o.pair_inBrackets(inp->tx, nx, ":"); 
+  }
+  else {
+    o.inBrackets(nx); 
+  }
+  o.print("d", nodes[nx].depth); 
+  o.print("fx", nodes[nx].fx); o.print(nodes[nx].border_val, 5); 
+
+  o.print(nodes[nx].dxs_num); 
+  o.disableDlm(); 
+  o.print("->"); o.pair_inParen(nodes[le_nx].dxs_num, nodes[gt_nx].dxs_num, ","); 
+  o.enableDlm(); 
+
+  o.print(org_weight,4); 
+  o.disableDlm(); 
+  o.print("->"); 
+  o.set_precision(4); 
+  o.pair_inParen(nodes[le_nx].weight, nodes[gt_nx].weight, ","); 
+  o.enableDlm(); 
+
+  o.print("gain", inp->gain, 5); 
+  o.print(inp->str_desc.c_str()); 
+  o.printEnd(); 
+  o.flush(); 
+}
+
+/*--------------------------------------------------------*/
+bool AzTrTree::isEmptyTree() const
+{
+  if (nodes_used == 1 && 
+      nodes[0].weight == 0) {
+    return true; 
+  }
+  return false; 
+}
+
+/*--------------------------------------------------------*/
+int AzTrTree::leafNum() const
+{
+  _checkNodes("AzTrTree::leafNum"); 
+  int leaf_num = 0; 
+  int nx; 
+  for (nx = 0; nx < nodes_used; ++nx) {
+    if (nodes[nx].isLeaf()) {
+      ++leaf_num; 
+    }
+  }
+  return leaf_num; 
+}
+
+/*--------------------------------------------------------*/
+void AzTrTree::concatDesc(const AzSvFeatInfo *feat, 
+                      int nx, 
+                      AzBytArr *str_desc, /* output */
+                      int max_len) const
+{
+  if (feat == NULL) {
+    str_desc->concat("not_available"); 
+  }
+
+  _checkNode(nx, "AzTrTree::concatDesc"); 
+  if (nx == root_nx) {
+    str_desc->concat("ROOT"); 
+  }
+  else {
+    _genDesc(feat, nx, str_desc); 
+  }
+
+  if (max_len > 0 && str_desc->getLen() > max_len) {
+    AzBytArr str(str_desc->point(), max_len); 
+    str.concat("..."); 
+    str_desc->clear(); 
+    str_desc->concat(&str); 
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzTrTree::_genDesc(const AzSvFeatInfo *feat, 
+                       int nx, 
+                       AzBytArr *str_desc) /* output */
+					   const
+{
+  int px = nodes[nx].parent_nx; 
+  if (px < 0) return; 
+
+  _genDesc(feat, px, str_desc); 
+  if (str_desc->getLen() > 0) {
+    str_desc->concat(";"); 
+  }
+  feat->concatDesc(nodes[px].fx, str_desc); 
+  if (nodes[px].le_nx == nx) {
+    str_desc->concat("<="); 
+  }
+  else {
+    str_desc->concat(">"); 
+  }
+  /* sprintf(work, "%5.3f", nodes[px]->border_val); */
+  str_desc->concatFloat(nodes[px].border_val, 5); 
+}
+
+/*--------------------------------------------------------*/
+void AzTrTree::_isActiveNode(bool doWantInternalNodes, 
+                                 bool doAllowZeroWeightLeaf, 
+                                 AzIntArr *ia_isActiveNode) const
+{
+  _checkNodes("AzTree_Reggfo::isActiveNode"); 
+  ia_isActiveNode->reset(nodes_used, false); 
+  int *isActive = ia_isActiveNode->point_u(); 
+  int nx; 
+  for (nx = 0; nx < nodes_used; ++nx) {
+    if (nodes[nx].isLeaf()) {
+      if (nodes[nx].weight != 0) {
+        isActive[nx] = true; 
+      
