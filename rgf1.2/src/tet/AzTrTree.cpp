@@ -383,4 +383,201 @@ void AzTrTree::_isActiveNode(bool doWantInternalNodes,
     if (nodes[nx].isLeaf()) {
       if (nodes[nx].weight != 0) {
         isActive[nx] = true; 
-      
+      }
+      else {  /* zero-weight leaf */
+        if (doAllowZeroWeightLeaf) {
+          isActive[nx] = true; 
+        }
+        else {
+          isActive[nx] = false; 
+        }
+      }
+    }
+    else if (doWantInternalNodes && nx != root_nx) {
+      isActive[nx] = true; 
+    }
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzTrTree::apply(const AzDataForTrTree *data, 
+                     const AzIntArr *ia_dx, 
+                     AzDvect *v_p) /* output */
+const
+{
+  v_p->reform(data->dataNum()); 
+  double *p = v_p->point_u(); 
+  int num; 
+  const int *dxs = ia_dx->point(&num); 
+  int ix; 
+  for (ix = 0; ix < num; ++ix) {
+    int dx = dxs[ix]; 
+    p[dx] = apply(data, dx, NULL); 
+  }
+}
+
+/*--------------------------------------------------------*/
+double AzTrTree::apply(const AzDataForTrTree *data, 
+                       int dx, 
+                       AzIntArr *ia_nx) /* node path */
+const 
+{
+  const char *eyec = "AzTrTree::apply(dfd,dx)"; 
+  int nx = root_nx; 
+  double p_val = 0; 
+  for ( ; ; ) {
+    if (nx < 0) {
+      throw new AzException(eyec, "stuck"); 
+    }
+    if (ia_nx != NULL) {
+      ia_nx->put(nx); 
+    }
+    const AzTrTreeNode *np = &nodes[nx]; 
+    p_val += np->weight; 
+    if (np->isLeaf()) { /* leaf */
+      break; 
+    }
+
+    bool isLE = data->isLE(dx, np->fx, np->border_val); 
+    if (isLE) {
+      nx = nodes[nx].le_nx;         
+    }
+    else {
+      nx = nodes[nx].gt_nx; 
+    }
+  }
+  return p_val; 
+} 
+
+/*------------------------------------------------------------------*/
+void AzTrTree::updatePred(const AzDataForTrTree *dfd, 
+                          AzDvect *v_pval) /* inout */
+const
+{
+  int data_num = dfd->dataNum(); 
+  if (v_pval->rowNum() != data_num) {
+    throw new AzException("AzTrTree::updatePred", "dim mismatch"); 
+  }
+  double *p_val = v_pval->point_u(); 
+  int dx; 
+  for (dx = 0; dx < data_num; ++dx) {
+    p_val[dx] += apply(dfd, dx); 
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzTrTree::copy_nodes_from(const AzTrTree_ReadOnly *inp) 
+{
+  const char *eyec = "AzTrTree::copy_nodes_from"; 
+  _release(); 
+  root_nx = inp->root(); 
+  nodes_used = inp->nodeNum(); 
+  ia_root_dx.reset(inp->root_dx()); 
+  const int *root_dxs = ia_root_dx.point(); 
+  a_node.alloc(&nodes, nodes_used, eyec); 
+  int nx; 
+  for (nx = 0; nx < nodes_used; ++nx) {
+    nodes[nx] = *inp->node(nx); 
+    if (inp->node(nx)->dxs != NULL && ia_root_dx.size() > 0) {
+      nodes[nx].dxs = root_dxs + nodes[nx].dxs_offset; 
+    }
+  }
+}
+
+/*--------------------------------------------------------*/
+const int *AzTrTree::set_data_indexes(int offset, 
+                     const int *dxs, 
+                     int dxs_num)
+{
+  int ix_end = offset + dxs_num; 
+  if (ix_end > ia_root_dx.size()) {
+    throw new AzException("AzTrTree::set_data_indexes", "out of range"); 
+  } 
+
+  int *root_dxs = ia_root_dx.point_u(); 
+  int ix; 
+  for (ix = 0; ix < dxs_num; ++ix) {
+    root_dxs[ix+offset] = dxs[ix]; 
+  }
+  return root_dxs + offset; 
+}
+
+/*--------------------------------------------------------*/
+void AzTrTree::warmup(const AzTreeNodes *inp, 
+                      const AzDataForTrTree *data, 
+                      AzDvect *v_p, /* inout */
+                      const AzIntArr *ia_tr_dx) /* may be NULL */
+{
+  const char *eyec = "AzTrTree::warmup"; 
+  _release(); 
+
+  if (inp->nodeNum() == 0) {
+    return; 
+  }
+
+  AzIntArr ia_split_nx; 
+  int nx; 
+  for (nx = 0; nx < inp->nodeNum(); ++nx) {
+    const AzTreeNode *inp_np = inp->node(nx); 
+    if (inp_np->parent_nx >= 0 && inp->node(inp_np->parent_nx)->le_nx == nx) {
+      ia_split_nx.put(inp_np->parent_nx); 
+    }
+    if (!inp_np->isLeaf() && inp_np->weight != 0) { /* this shouldn't happen, though */
+      throw new AzException(eyec, "internal nodes have non-zero weights"); 
+    }
+  }
+
+  _genRoot(inp->nodeNum(), data, ia_tr_dx); 
+  if (root_nx != inp->root()) {
+    throw new AzException(eyec, "root node id mismatch"); 
+  }
+
+  AzOut dummy_out; 
+  dummy_out.deactivate(); 
+  int ix; 
+  for (ix = 0; ix < ia_split_nx.size(); ++ix) {
+    int split_nx = ia_split_nx.get(ix); 
+    if (split_nx >= nodes_used) {
+      throw new AzException(eyec, "something is wrong with split order"); 
+    }
+
+    sorted_array(split_nx, data); 
+
+    const AzTreeNode *inp_np = inp->node(split_nx); 
+    double dummy_gain = 1.0; 
+    AzTrTsplit split(inp_np->fx, inp_np->border_val, dummy_gain, 
+                     inp->node(inp_np->le_nx)->weight, 
+                     inp->node(inp_np->gt_nx)->weight);  
+    _splitNode(data, inp->nodeNum(), false, split_nx, &split, dummy_out); 
+  }
+
+  /*---  compare the basic structure  ---*/
+  if (nodes_used != inp->nodeNum()) {
+    throw new AzException(eyec, "#node mismatch"); 
+  }
+
+  double *p = v_p->point_u(); 
+  for (nx = 0; nx < nodes_used; ++nx) {
+    const AzTreeNode *inp_np = inp->node(nx); 
+    AzTrTreeNode *np = &nodes[nx]; 
+    if (np->fx != inp_np->fx || 
+        np->border_val != inp_np->border_val || 
+        np->le_nx != inp_np->le_nx || 
+        np->gt_nx != inp_np->gt_nx || 
+        np->parent_nx != inp_np->parent_nx || 
+        np->weight != inp_np->weight) {
+      throw new AzException(eyec, "conflict in basic structure"); 
+    } 
+
+    /*---  update predictions  ---*/
+    if (np->weight != 0) {
+      int ix; 
+      for (ix = 0; ix < np->dxs_num; ++ix) {
+        int dx = np->dxs[ix]; 
+        p[dx] += np->weight; 
+      }
+    }
+  }
+}
+
+/*-----
