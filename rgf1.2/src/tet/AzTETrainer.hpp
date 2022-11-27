@@ -148,4 +148,9 @@ protected:
     return &td->_v; 
   }
   //! to access AzTETrainer_TestData's work area for faster testing 
-  inline int *_t(AzTE
+  inline int *_t(AzTETrainer_TestData *td) const {
+    return &td->_t; 
+  }
+}; 
+
+#endif
