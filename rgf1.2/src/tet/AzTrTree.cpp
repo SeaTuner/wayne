@@ -580,4 +580,166 @@ void AzTrTree::warmup(const AzTreeNodes *inp,
   }
 }
 
-/*-----
+/*--------------------------------------------------------*/
+void AzTrTree::quick_warmup(const AzTreeNodes *inp, 
+                      const AzDataForTrTree *data, 
+                      AzDvect *v_p, /* inout */
+                      const AzIntArr *inp_ia_tr_dx) /* may be NULL */
+{
+  const char *eyec = "AzTrTree::warmup"; 
+  _release(); 
+
+  const AzIntArr *ia_tr_dx = inp_ia_tr_dx; 
+  AzIntArr ia_temp; 
+  if (ia_tr_dx == NULL) {
+    ia_temp.range(0, data->dataNum()); 
+    ia_tr_dx = &ia_temp; 
+  }
+
+  /*---  copy the basic structure  ---*/
+  root_nx = inp->root(); 
+  nodes_used = inp->nodeNum(); 
+  a_node.alloc(&nodes, nodes_used, eyec, "nodes"); 
+  a_split.free(&split); 
+  a_sorted_arr.free(&sorted_arr); 
+  int nx; 
+  for (nx = 0; nx < nodes_used; ++nx) {
+    const AzTreeNode *inp_np = inp->node(nx); 
+    AzTrTreeNode *out_np = &nodes[nx]; 
+    out_np->fx         = inp_np->fx; 
+    out_np->border_val = inp_np->border_val; 
+    out_np->le_nx      = inp_np->le_nx; 
+    out_np->gt_nx      = inp_np->gt_nx; 
+    out_np->parent_nx  = inp_np->parent_nx; 
+    out_np->weight     = inp_np->weight; 
+
+    if (!inp_np->isLeaf() && inp_np->weight != 0) { /* this shouldn't happen, though */
+      throw new AzException(eyec, "internal nodes have non-zero weights"); 
+    }
+  }
+
+  /*---  set data points  ---*/
+  AzDataArray<AzIntArr> aIa_dx(nodes_used); 
+  int dx_num = ia_tr_dx->size(); 
+  int ix; 
+  for (ix = 0; ix < dx_num; ++ix) {
+    int dx = ia_tr_dx->get(ix); 
+    AzIntArr ia_nx; 
+    double val = apply(data, dx, &ia_nx); 
+    v_p->add(dx, val); 
+    int jx; 
+    for (jx = 0; jx < ia_nx.size(); ++jx) {
+      nx = ia_nx.get(jx); 
+      if (nodes[nx].isLeaf()) {
+        aIa_dx.point_u(nx)->put(dx); 
+      }
+    }
+  }
+
+  /*---  set node depth and pop ---*/
+  for (nx = 0; nx < nodes_used; ++nx) {
+    nodes[nx].dxs_num = nodes[nx].depth = 0; 
+    nodes[nx].dxs = NULL; 
+    nodes[nx].dxs_offset = -1; 
+  }
+  for (nx = 0; nx < nodes_used; ++nx) {
+    int temp_nx = nodes[nx].parent_nx; 
+    while(temp_nx >= 0) {
+      ++nodes[nx].depth; 
+      temp_nx = nodes[temp_nx].parent_nx; 
+    }
+  }
+
+  /* make ia_root_dx and set dxs_offset, dxs_num, dxs. */
+  AzIntArr ia_leaf_in_order; 
+  orderLeaves(&ia_leaf_in_order); 
+
+  ia_root_dx.reset(ia_tr_dx->size(), -1); 
+  int offset = 0; 
+  for (ix = 0; ix < ia_leaf_in_order.size(); ++ix) {
+    int leaf_nx = ia_leaf_in_order.get(ix); 
+    const AzIntArr *ia_leaf_dx = aIa_dx.point(leaf_nx); 
+    nodes[leaf_nx].dxs_offset = offset; 
+    nodes[leaf_nx].dxs = set_data_indexes(offset, ia_leaf_dx->point(), 
+                                          ia_leaf_dx->size()); 
+    nodes[leaf_nx].dxs_num = ia_leaf_dx->size(); 
+    offset += ia_leaf_dx->size(); 
+
+    int temp_nx = nodes[leaf_nx].parent_nx; 
+    while(temp_nx >= 0) {
+      AzTrTreeNode *temp_np = &nodes[temp_nx]; 
+      if (temp_np->dxs == NULL) {
+        temp_np->dxs_offset = nodes[leaf_nx].dxs_offset; 
+        temp_np->dxs = nodes[leaf_nx].dxs; 
+      }
+      else {
+        if (temp_np->dxs_offset+temp_np->dxs_num != nodes[leaf_nx].dxs_offset) {
+          throw new AzException(eyec, "Inconsistency in data indexes"); 
+        }
+      }
+
+      temp_np->dxs_num += nodes[leaf_nx].dxs_num; 
+      temp_nx = temp_np->parent_nx; 
+    }
+  }
+  if (offset != ia_tr_dx->size()) {
+    throw new AzException(eyec, "conflict in total# of data indexes"); 
+  }
+}
+
+/*------------------------------------------------------------------*/
+void AzTrTree::orderLeaves(AzIntArr *ia_leaf_in_order)
+{
+  int leaf_num = leafNum(); 
+  ia_leaf_in_order->reset(); 
+  ia_leaf_in_order->prepare(leaf_num); 
+  _orderLeaves(ia_leaf_in_order, root_nx); 
+  if (ia_leaf_in_order->size() != leaf_num) {
+    throw new AzException("AzTrTree::orderLeaves", "#leaf conflict"); 
+  }
+}
+
+/*------------------------------------------------------------------*/
+void AzTrTree::_orderLeaves(AzIntArr *ia_leaf_in_order, 
+                            int nx) 
+{
+  if (nodes[nx].isLeaf()) {
+    ia_leaf_in_order->put(nx); 
+    return; 
+  }
+  _orderLeaves(ia_leaf_in_order, nodes[nx].le_nx); 
+  _orderLeaves(ia_leaf_in_order, nodes[nx].gt_nx); 
+} 
+
+/*------------------------------------------------------------------*/
+double AzTrTree::init_const(AzLossType loss_type, 
+                            const AzDvect *v_y, 
+                            const AzIntArr *ia_tr_dx) /* may be NULL*/
+{
+  double y_avg = v_y->average(ia_tr_dx); 
+  double const_val = 0; 
+  if (loss_type == AzLoss_Logistic2) {
+    /* For Algorithm 5 of Friedman'00, Greedy Function Approximation ... */
+    const_val = log((1+y_avg)/(1-y_avg))/2; /* e^f/(e^f+e^{-f})=(yavg+1)/2 */
+  }
+  else if (loss_type == AzLoss_Logistic1) {
+    const_val = log((1+y_avg)/(1-y_avg)); /* e^f/(1+e^f)=(yavg+1)/2 */
+  }
+  else {
+    const_val = y_avg; 
+  }
+  return const_val; 
+}
+
+/*------------------------------------------------------------------*/
+double AzTrTree::init_constw(AzLossType loss_type, 
+                             const AzDvect *v_y, 
+                             const AzDvect *v_fixed_dw, /* may be NULL */
+                             const AzIntArr *ia_tr_dx) /* may be NULL*/
+{
+  if (AzDvect::isNull(v_fixed_dw)) {
+    return init_const(loss_type, v_y, ia_tr_dx); 
+  }
+
+  if (loss_type == AzLoss_Logistic1 || loss_type == AzLoss_Logistic2) {
+    throw new AzException(
