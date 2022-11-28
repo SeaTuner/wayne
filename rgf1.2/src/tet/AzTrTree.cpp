@@ -742,4 +742,88 @@ double AzTrTree::init_constw(AzLossType loss_type,
   }
 
   if (loss_type == AzLoss_Logistic1 || loss_type == AzLoss_Logistic2) {
-    throw new AzException(
+    throw new AzException("AzTrTree::init_const(weighted)", "not supported"); 
+  }
+  AzDvect v_wy(v_y); 
+  v_wy.scale(v_fixed_dw); 
+  double wy_sum = v_wy.sum(ia_tr_dx); 
+  double w_sum = v_fixed_dw->sum(ia_tr_dx); 
+  double const_val = wy_sum/w_sum; 
+  return const_val; 
+}
+
+/*------------------------------------------------------------------*/
+const AzSortedFeatArr *AzTrTree::sorted_array(int nx, 
+                             const AzDataForTrTree *data) const
+{
+  const char *eyec = "AzTrTree::sorted_array"; 
+  if (isBagging) {
+    throw new AzException(eyec, "No support for bagging"); 
+  }
+
+  _checkNode(nx, "sortedFeat"); 
+  if (sorted_arr == NULL) {
+    throw new AzException(eyec, "no sorted_arr"); 
+  }
+
+  if (sorted_arr[nx] != NULL) {
+    /*---  already exists  ---*/
+    return sorted_arr[nx]; 
+  }
+
+  /*---  root  ---*/
+  if (nx == root_nx) {
+#if 0
+    if (nodes[nx].dxs_num != data->dataNum()) {
+      /*---  Do not allow sampling  ---*/
+      throw new AzException(eyec, "#data mismatch"); 
+    }
+    return data->sorted_array(); 
+#else
+    if (nodes[nx].dxs_num != data->dataNum()) {
+      /*---  Allow sampling  ---*/
+      sorted_arr[nx] = new AzSortedFeatArr(data->sorted_array(), 
+                                           nodes[nx].dxs, nodes[nx].dxs_num); 
+      return sorted_arr[nx]; 
+    }
+    else {
+      return data->sorted_array(); 
+    }
+#endif 
+  }
+
+  if (sorted_arr[root_nx] == NULL) {
+    /*---  we need this as the base for SortedFeat_Dense  ---*/
+    sorted_arr[root_nx] = new AzSortedFeatArr(data->sorted_array());     
+  }
+  int px = nodes[nx].parent_nx; 
+  if (px < 0) {
+    throw new AzException(eyec, "Not root, but no parent?!"); 
+  }
+
+  const AzSortedFeatArr *inp = sorted_arr[px]; 
+  if (inp == NULL) {
+    throw new AzException(eyec, "No input for separation"); 
+  }
+
+  /*---  make a new one and save it.  ---*/
+  AzSortedFeatArr *base = sorted_arr[root_nx]; 
+
+  int le_nx = nodes[px].le_nx; 
+  int gt_nx = nodes[px].gt_nx; 
+  if (sorted_arr[le_nx] != NULL || sorted_arr[gt_nx] != NULL) {
+    throw new AzException(eyec, "one child has sorted_arr and the other doesn't?!"); 
+  }
+  sorted_arr[le_nx] = new AzSortedFeatArr(); 
+  sorted_arr[gt_nx] = new AzSortedFeatArr(); 
+  AzSortedFeatArr::separate(base, inp, 
+                            nodes[le_nx].dxs, nodes[le_nx].dxs_num, 
+                            nodes[gt_nx].dxs, nodes[gt_nx].dxs_num, 
+                            sorted_arr[le_nx], sorted_arr[gt_nx]); 
+  if (px != root_nx) { /* can't delete the one at the root as it's the base */
+    delete sorted_arr[px]; sorted_arr[px] = NULL; 
+  }
+
+  return sorted_arr[nx]; 
+}
+
