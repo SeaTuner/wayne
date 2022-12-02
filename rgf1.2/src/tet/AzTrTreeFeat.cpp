@@ -349,4 +349,182 @@ int AzTrTreeFeat::_update(const AzTrTree_ReadOnly *dtree,
     AzTrTreeFeatInfo *fp = f_inf.new_slot(&feat_no);  
     fp->tx = tx; 
     fp->nx = nx; 
-    fp->rule.reset(rule.b
+    fp->rule.reset(rule.bytarr()); 
+
+    if (doCountRules) {
+      pool_rules.put(rule.bytarr()); 
+    }
+    isActive[nx] = feat_no; 
+
+    ++added_feat_num; 
+
+    /*---  only for print purpose  ---*/
+    if (!dmp_out.isNull()) {
+      AzBytArr str_desc; 
+      int max_len = 256; 
+      dtree->concatDesc(&org_featInfo, nx, &str_desc, max_len); 
+      sp_desc.put(&str_desc); 
+    } 
+  }
+
+  return added_feat_num; 
+}
+
+/* -----------------------------------------------------------------*/
+/*------------------------------------------------------------------*/
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::concatDesc(int ex, AzBytArr *str_desc) const
+{
+  str_desc->inBrackets(ex); 
+  if (sp_desc.size() > 0) {
+    if (ex >= 0 && ex < sp_desc.size()) {
+      sp_desc.get(ex, str_desc); 
+    }
+    else {
+      str_desc->concat("?!?"); 
+    }
+  }
+  else {
+    str_desc->concat("tf"); 
+    str_desc->concatInt(ex); 
+  }
+}
+
+//! for maintenance purpose only 
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::checkConsistency(const AzTrTreeEnsemble_ReadOnly *ens) const
+{
+  const char *eyec = "AzTrTreeFeat::checkConsistency"; 
+
+  int dtree_num = ens->size(); 
+  if (ip_featDef.size() != dtree_num) {
+    throw new AzException(eyec, "#tree conflict"); 
+  }
+  int f_num = featNum(); 
+  if (sp_desc.size() > 0 && sp_desc.size() != f_num) {
+    throw new AzException(eyec, "#feat conflict"); 
+  }
+
+  int tx; 
+  for (tx = 0; tx < dtree_num; ++tx) {
+    int num; 
+    const int *feat_no = ip_featDef.point(tx, &num); 
+    if (num != ens->tree(tx)->nodeNum()) {
+      throw new AzException(eyec, "#node conflict"); 
+    }
+    int nx; 
+    for (nx = 0; nx < num; ++nx) {
+      /*---  ip_featDef -> dtree[]  ---*/
+      double tree_w = ens->tree(tx)->node(nx)->weight; 
+      if (tree_w != 0 && feat_no[nx] < 0) {
+        throw new AzException(eyec, "non-zero weight in the tree for non-feature?"); 
+      }
+
+      /*---  ip_featDef -> f_inf  ---*/
+      if (feat_no[nx] >= 0) {
+        const AzTrTreeFeatInfo *fp = f_inf.point(feat_no[nx]); 
+        if (fp->isRemoved) {
+          throw new AzException(eyec, "a removed feature is active in ip_featDef"); 
+        }
+        if (fp->tx != tx || fp->nx != nx) {
+          throw new AzException(eyec, "conflict between f_inf and ip_featDef"); 
+        }
+      }
+    }
+  }
+
+  /*---  f_inf -> ip_featDef  ---*/
+  int fx; 
+  for (fx = 0; fx < f_num; ++fx) {
+    const AzTrTreeFeatInfo *fp = f_inf.point(fx); 
+    if (fp->isRemoved) continue; 
+    
+    if (fp->tx < 0 || fp->tx >= dtree_num) {
+      throw new AzException(eyec, "f_inf is pointing non-existing tree"); 
+    }
+    int num; 
+    const int *feat_no = ip_featDef.point(fp->tx, &num);     
+    if (fp->nx < 0 || fp->nx >= num) {
+      throw new AzException(eyec, "f_inf is pointing non-existing node");       
+    }
+    if (feat_no[fp->nx] != fx) {
+      throw new AzException(eyec, "conflict in feat# between f_inf and ip_featDef"); 
+    }
+  }
+}
+
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::consolidateInternalWeights(const AzDvect *v_inp_w, 
+                                          const AzTrTreeEnsemble_ReadOnly *ens, 
+                                          AzDvect *v_w) /* output */
+                                          const
+{
+  int f_num = featNum();  /* #features */
+  v_w->reform(f_num); 
+
+  const double *inp_w = v_inp_w->point(); 
+  double *w = v_w->point_u(); 
+
+  int dtree_num = ens->size(); 
+
+  int fx; 
+  for (fx = 0; fx < f_num; ++fx) {
+    const AzTrTreeFeatInfo *fp = f_inf.point(fx); 
+    if (fp->isRemoved) continue; 
+    if (fp->tx < 0 || fp->tx >= dtree_num) {
+      throw new AzException("AzTrTreeFeat::consolidateInternalWeights", "tree# conflict"); 
+    }
+    const AzTrTree_ReadOnly *my_tree = ens->tree(fp->tx); 
+    int nx = fp->nx; 
+    if (my_tree->node(nx)->isLeaf()) {
+      int num; 
+      const int *feat_no = ip_featDef.point(fp->tx, &num); 
+      for ( ; ; ) {
+        if (nx < 0) break; 
+        if (feat_no[nx] >= 0) {
+          w[fx] += inp_w[feat_no[nx]]; 
+        }
+        nx = my_tree->node(nx)->parent_nx; 
+      }
+    }
+  }
+}
+
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::updateRulePools()
+{
+  const char *eyec = "AzTrTreeFeat::updateRulePools"; 
+
+  if (!doCountRules) return; 
+  if (pool_rules.isThisCommitted() && 
+      pool_rules_rmved.isThisCommitted()) {
+    return; 
+  }
+
+  pool_rules.commit(); 
+  pool_rules_rmved.commit(); 
+  int rmved = pool_rules_rmved.size(); 
+  int rx; 
+  for (rx = 0; rx < rmved; ++rx) { /* for every removed rule */
+    int len; 
+    const AzByte *bytes = pool_rules_rmved.point(rx, &len); 
+    int idx = pool_rules.find(bytes, len); 
+    if (idx < 0) {
+      throw new AzException(eyec, "rule doesn't exist??"); 
+    }
+
+    AZint8 nega = pool_rules_rmved.getCount(rx); /* how many times removed */
+    AZint8 posi = pool_rules.getCount(idx);  /* how many times added */
+    AZint8 new_count = posi - nega; 
+    if (new_count == 0) {
+      pool_rules.removeEntry(idx); 
+    }
+    else if (new_count < 0) {
+      throw new AzException(eyec, "#added < #removed?"); 
+    }
+    else {
+      pool_rules.setCount(idx, new_count); 
+    }
+  }
+
+  pool_rules_rmved.reset();
