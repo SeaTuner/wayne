@@ -73,4 +73,138 @@ public:
 
   /*---  for faster node search  ---*/
   virtual const AzSortedFeatArr *sorted_array(int nx, 
-                             const AzDataForTrTre
+                             const AzDataForTrTree *data) const; 
+
+  /*---  information seeking ... ---*/
+  inline int maxDepth() const {
+    return curr_max_depth; 
+  }
+  inline int nodeNum() const {
+    return nodes_used; 
+  }
+  inline int root() const {
+    return root_nx; 
+  }
+  inline const AzTrTreeNode *node(int nx) const {
+    _checkNode(nx, "look"); 
+    return &nodes[nx];  
+  }
+  bool isEmptyTree() const; 
+  int leafNum() const; 
+  void show(const AzSvFeatInfo *feat, const AzOut &out) const; 
+  void concat_stat(AzBytArr *o) const; 
+  double getRule(int inp_nx, AzTreeRule *rule) const; 
+  void concatDesc(const AzSvFeatInfo *feat, int nx, 
+                  AzBytArr *str_desc, /*!< output */
+                  int max_len=-1) const; 
+
+  /*---  apply ... ---*/
+  void apply(const AzDataForTrTree *data, 
+             const AzIntArr *ia_dx, 
+             AzDvect *v_p) const; /* output */
+  double apply(const AzDataForTrTree *data, int dx, 
+               AzIntArr *ia_nx=NULL) const; /* node path */
+  double apply(const AzSvect *v) const {
+    return AzTree::apply(v, this); 
+  }
+
+  void updatePred(const AzDataForTrTree *dfd, 
+                  AzDvect *v_pval) const; /* inout */
+
+  /*---  prohibit =  ---*/
+  inline AzTrTree & operator =(const AzTrTree &inp) {
+    if (this == &inp) return *this; 
+    throw new AzException("AzTrTree:=", "Don't use ="); 
+  }
+
+  /*-----*/
+  void copy_to(AzTree *tree) const; 
+
+  //! copy only nodes; no split.  
+  virtual void copy_nodes_from(const AzTrTree_ReadOnly *inp); 
+
+  virtual void warmup(const AzTreeNodes *inp, 
+                     const AzDataForTrTree *data, 
+                     AzDvect *v_p, /* inout */
+                     const AzIntArr *ia_tr_dx=NULL); 
+  virtual void quick_warmup(const AzTreeNodes *inp, 
+                      const AzDataForTrTree *data, 
+                      AzDvect *v_p, /* inout */
+                      const AzIntArr *inp_ia_tr_dx); /* may be NULL */
+
+  static double init_const(AzLossType loss_type, 
+                           const AzDvect *v_y, 
+                           const AzIntArr *ia_tr_dx=NULL); /* may be NULL*/
+  static double init_constw(AzLossType loss_type, 
+                            const AzDvect *v_y, 
+                            const AzDvect *v_fixed_dw, /* may be NULL */
+                            const AzIntArr *ia_tr_dx=NULL); /* may be NULL*/
+
+  inline const AzIntArr *root_dx() const {
+    return &ia_root_dx; 
+  }
+
+  /*---  to store data indexes to disk  ---*/
+  virtual void forStoringDataIndexes(AzFile *file) {}
+  virtual int estimateSizeofDataIndexes(int data_num) {return -1;}
+protected:
+  /*---  tools for derived classes; for building a tree  ---*/
+  void _release(); 
+  void _releaseWork(); 
+  int _newNode(int max_size); 
+  void _genRoot(int max_size, const AzDataForTrTree *data, 
+                const AzIntArr *ia_dx=NULL); 
+  void _splitNode(const AzDataForTrTree *data, 
+                 int max_size, bool doUseInternalNodes, 
+                 int nx,
+                 const AzTrTsplit *split, 
+                 const AzOut &out); 
+
+  /*---  sub-routines for information seeking ... ---*/
+  void _show(const AzSvFeatInfo *feat, 
+             int nx, 
+             int depth, 
+             const AzOut &out) const; 
+  void _genDesc(const AzBytArr *str_parent, 
+                      AzBytArr str_feat, 
+                      double border_val, 
+                      bool isLe, 
+                      AzBytArr *str_desc) const; /* output */
+  void _genDesc(const AzSvFeatInfo *feat, 
+                int nx, 
+                AzBytArr *str_desc) const; /* output */
+
+  /*---  check consistency  ---*/
+  inline void _checkNode(int nx, const char *eyec) const {
+    if (nodes == NULL || nx < 0 || nx >= nodes_used) {
+      throw new AzException(eyec, "nx is out of range"); 
+    }
+  }
+  inline void _checkNodes(const char *msg) const {
+    if (nodes == NULL && nodes_used > 0) {
+      throw new AzException("no nodes", msg); 
+    }
+  }
+
+  /*---  ---*/
+  void _isActiveNode(bool doWantInternalNodes, 
+                     bool doAllowZeroWeightLeaf, 
+                     AzIntArr *ia_isDecisionNode) const; /* output */
+
+
+  void dump_split(const AzTrTsplit *inp, 
+                     int nx, 
+                     double org_weight, 
+                     const AzOut &out); 
+
+  /*---  change the contents of ia_root_dx  ---*/
+  const int *set_data_indexes(int offset, 
+                     const int *dxs, 
+                     int dxs_num); 
+
+  void orderLeaves(AzIntArr *ia_leaf_in_order); 
+  void _orderLeaves(AzIntArr *ia_leaf_in_order, 
+                    int nx); 
+}; 
+
+#endif 
