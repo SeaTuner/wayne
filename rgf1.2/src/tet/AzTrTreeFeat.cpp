@@ -174,4 +174,179 @@ int AzTrTreeFeat::_update_with_existing_trees(int old_t_num,
 
     AzIntArr ia_new_featDef;    
     added_f_num2 += _update(ens->tree(tx), tx, &ia_new_featDef, 
-                            
+                            featDef, featDef_len, 
+                            ia_rmv_fx); 
+    ip_featDef.update(tx, &ia_new_featDef); 
+  }
+  return added_f_num2; 
+}
+
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::_updateMatrix(const AzDataForTrTree *data, 
+                          const AzTrTreeEnsemble_ReadOnly *ens, 
+                          int old_f_num, 
+                          /*---  output  ---*/
+                          AzBmat *b_tran) const
+{
+  int data_num = data->dataNum(); 
+  int f_num = featNum(); 
+  if (old_f_num == 0) {
+    b_tran->reform(data_num, f_num); 
+  }
+  else {
+    if (b_tran->rowNum() != data_num || 
+        b_tran->colNum() != old_f_num) {
+      throw new AzException("AzTrTreeFeat::_updateMatrix", 
+                            "b_tran has a wrong shape"); 
+    }
+    b_tran->resize(f_num); 
+  }
+
+  /*---  which trees are referred in the new features?  ---*/
+  AzIntArr ia_tx; 
+  int fx; 
+  for (fx = old_f_num; fx < f_num; ++fx) {
+    ia_tx.put(f_inf.point(fx)->tx); 
+  }
+  ia_tx.unique(); /* remove duplication */
+  int tx_num; 
+  const int *txs = ia_tx.point(&tx_num); 
+
+  /*---  generate features  ---*/
+  AzDataArray<AzIntArr> aia_fx_dx(f_num-old_f_num); 
+  int xx; 
+  for (xx = 0; xx < tx_num; ++xx) {
+    int tx = txs[xx]; 
+    int dx; 
+    for (dx = 0; dx < data_num; ++dx) {
+      genFeats(ens->tree(tx), tx, data, dx, 
+               old_f_num, &aia_fx_dx); 
+    }
+  }
+
+  /*---  load into the matrix  ---*/
+  for (fx = old_f_num; fx < f_num; ++fx) {
+    b_tran->load(fx, aia_fx_dx.point(fx-old_f_num)); 
+  }  
+}
+
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::genFeats(const AzTrTree_ReadOnly *dtree, 
+                        int tx, 
+                        const AzDataForTrTree *data, 
+                        int dx, 
+                        int fx_offs, 
+                        /*---  output  ---*/
+                        AzDataArray<AzIntArr> *aia_fx_dx)
+const
+{
+  AzIntArr ia_nx; 
+  dtree->apply(data, dx, &ia_nx); 
+
+  int num; 
+  const int *nx = ia_nx.point(&num); 
+  int ix; 
+  for (ix = 0; ix < num; ++ix) {
+    int feat_no = (ip_featDef.point(tx))[nx[ix]]; 
+    if (feat_no >= fx_offs) {     
+      aia_fx_dx->point_u(feat_no-fx_offs)->put(dx); 
+    }
+  }
+}
+
+/* can be used for both frontier and non-frontier */
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::updateMatrix(const AzDataForTrTree *data, 
+                                const AzTrTreeEnsemble_ReadOnly *ens, 
+                                AzBmat *b_tran) /* inout */
+                                const
+{
+  if (data == NULL) return; 
+
+  const char *eyec = "AzTrTreeFeat::updateMatrix"; 
+  int f_num = featNum(); 
+  if (ens->size() != treeNum()) {
+    throw new AzException(eyec, "size of tree ensemble and #feat should be the same"); 
+  }
+  int old_f_num = b_tran->colNum(); 
+  if (old_f_num > f_num) {
+    throw new AzException(eyec, "#col is bigger than #feat"); 
+  }
+  int fx; 
+  for (fx = 0; fx < old_f_num; ++fx) {
+    if (f_inf.point(fx)->isRemoved) {
+      b_tran->clear(fx); 
+    }
+  }
+
+  if (old_f_num == f_num) {
+    if (old_f_num == 0) {
+      /* for the rare case that no feature was generated */
+      b_tran->reform(data->dataNum(), f_num);  /* added 9/13/2011 */
+    }
+    return; 
+  }
+
+  _updateMatrix(data, ens, old_f_num, b_tran); 
+}
+
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::removeFeat(int removed_fx)
+{
+  AzTrTreeFeatInfo *fp = f_inf.point_u(removed_fx); 
+  if (fp->isRemoved) {
+    throw new AzException("AzTrTreeFeat::removeFeat", "want to remove a removed feature??"); 
+  }
+  fp->isRemoved = true; 
+  if (doCountRules) {
+    pool_rules_rmved.put(&fp->rule); 
+  }
+}
+/*------------------------------------------------------------------*/
+int AzTrTreeFeat::_update(const AzTrTree_ReadOnly *dtree, 
+                      int tx, 
+                      AzIntArr *ia_isActiveNode, /* output */
+                      /*---  for updating old feature definition  ---*/
+                      const int *prevDef, int prevDef_len, 
+                      AzIntArr *ia_rmv_fx) 
+{
+  int added_feat_num = 0, rmv_num = 0; 
+  dtree->isActiveNode(doAllowZeroWeightLeaf, ia_isActiveNode); 
+  int node_num; 
+  int *isActive = ia_isActiveNode->point_u(&node_num); 
+  int nx; 
+  for (nx = 0; nx < node_num; ++nx) {
+    if (!isActive[nx]) {
+      isActive[nx] = AzNone; 
+      if (prevDef != NULL && 
+          nx < prevDef_len && 
+          prevDef[nx] >= 0) {
+        /*---  this was a feature before, but not any more  ---*/
+        /* dtree->setFeatNo(nx, AzNone); */
+        removeFeat(prevDef[nx]);  
+        if (ia_rmv_fx != NULL) {
+          ia_rmv_fx->put(prevDef[nx]); 
+        }
+        ++rmv_num;  
+      }
+      continue; 
+    }
+
+    /*---  active node  ---*/
+    if (prevDef != NULL && 
+        nx < prevDef_len && 
+        prevDef[nx] >= 0) {
+      /*---  this is already defined  ---*/
+      isActive[nx] = prevDef[nx];  /* set feat# as set before */
+      continue; 
+    }
+
+    /*---  we need to assign new feat#  ---*/
+    AzTreeRule rule; 
+    dtree->getRule(nx, &rule); 
+
+    int feat_no; 
+    AzTrTreeFeatInfo *fp = f_inf.new_slot(&feat_no);  
+    fp->tx = tx; 
+    fp->nx = nx; 
+    fp->rule.reset(rule.b
