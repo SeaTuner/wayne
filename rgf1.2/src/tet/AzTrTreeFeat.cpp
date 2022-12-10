@@ -527,4 +527,183 @@ void AzTrTreeFeat::updateRulePools()
     }
   }
 
-  pool_rules_rmved.reset();
+  pool_rules_rmved.reset(); 
+}
+
+/*------------------------------------------------------------------*/
+/*------------------------------------------------------------------*/
+int AzTrTreeFeat::countNonzeroNodup(const AzDvect *v_w, 
+                                    const AzTrTreeEnsemble_ReadOnly *ens) const 
+{
+  if (ens == NULL || ens->size() <= 0) {
+    return 0; 
+  }
+  if (ens->tree(0)->usingInternalNodes()) {
+    AzDvect my_v_w; 
+    consolidateInternalWeights(v_w, ens, &my_v_w); 
+    return countNonzeroNodup(&my_v_w); 
+  }
+  else {
+    return countNonzeroNodup(v_w);    
+  }
+}
+
+//! count non-zero featuers without duplication. 
+/*------------------------------------------------------------------*/
+int AzTrTreeFeat::countNonzeroNodup(const AzDvect *v_w) const
+{
+  const char *eyec = "AzTrTreeFeat::countNonzeroNodup"; 
+
+  if (!doCountRules) {
+    return -1; 
+  }
+
+  if (v_w->rowNum() != featNum()) {
+    throw new AzException(eyec, "#feat conflict"); 
+  }
+
+  AzIFarr ifa_rx_zerocount; 
+
+  int f_num = v_w->rowNum(); 
+  const double *w = v_w->point(); 
+  int fx; 
+  for (fx = 0; fx < f_num; ++fx) {
+    const AzTrTreeFeatInfo *fp = f_inf.point(fx); 
+    if (fp->isRemoved) {
+      continue; 
+    }
+    if (w[fx] == 0) {
+      int rule_idx = pool_rules.find(&fp->rule); 
+      if (rule_idx < 0) {
+        throw new AzException(eyec, "rule not found in the pool?!"); 
+      }
+      ifa_rx_zerocount.put(rule_idx, 1); 
+    }
+  }
+
+  int nz_f_num = pool_rules.size(); 
+  ifa_rx_zerocount.squeeze_Sum(); 
+  int num = ifa_rx_zerocount.size(); 
+  int ix; 
+  for (ix = 0; ix < num; ++ix) {
+    int rule_idx; 
+    int zero_count = (int)ifa_rx_zerocount.get(ix, &rule_idx); 
+    if (zero_count >= pool_rules.getCount(rule_idx)) {
+      --nz_f_num; 
+    }
+  }
+  return nz_f_num; 
+}
+
+/*------------------------------------------------------------------*/
+int AzTrTreeFeat::countNonzeroNodup(const AzTrTreeEnsemble_ReadOnly *ens) const
+{
+  AzDvect v_w; 
+  getWeight(ens, &v_w); 
+  return countNonzeroNodup(&v_w); 
+}
+
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::getWeight(const AzTrTreeEnsemble_ReadOnly *ens, 
+                         AzDvect *v_w) const /* output */
+{
+  const char *eyec = "AzTrTreeFeat::getWeight"; 
+  int dtree_num = ens->size();
+  if (dtree_num != treeNum()) {
+    throw new AzException(eyec, "#trees conflict"); 
+  }
+  int feat_num = featNum(); 
+  v_w->reform(feat_num); 
+
+  int tx; 
+  for (tx = 0; tx < dtree_num; ++tx) {
+    _getWeight(ens->tree(tx), tx, v_w);    
+  }
+}
+
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::_getWeight(const AzTrTree_ReadOnly *dtree, 
+                         int tx, 
+                         AzDvect *v_w) /* output: must be initialized by caller */
+                         const 
+{
+  int num; 
+  const int *featNo = ip_featDef.point(tx, &num); 
+  if (num != dtree->nodeNum()) {
+    throw new AzException("AzTrTreeFeat::_getWeight", "#nodes conflict"); 
+  }
+  int nx; 
+  for (nx = 0; nx < num; ++nx) {
+    if (featNo[nx] >= 0) {
+      double w = dtree->node(nx)->weight; 
+      v_w->set(featNo[nx], w); 
+    }
+  }   
+}
+
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::dump(const AzOut &out, const char *header) const
+{
+  if (out.isNull()) return; 
+ 
+  AzPrint o(out); 
+  o.printBegin(header); 
+  o.printSw("doAllowZeroWeightLeaf", doAllowZeroWeightLeaf); 
+  o.printSw("doCountRules", doCountRules); 
+  o.printSw("doCheckConsistency", doCheckConsistency); 
+  o.printEnd(); 
+  ip_featDef.dump(dmp_out, "ip_featDef"); 
+  
+  int f_num = featNum(); 
+  int fx; 
+  for (fx = 0; fx < f_num; ++fx) {
+    const AzTrTreeFeatInfo *fp = f_inf.point(fx); 
+    
+    o.printBegin("", ", ", "="); 
+    o.inBrackets(fx); 
+    o.print("isRemoved", fp->isRemoved); 
+    o.print("tx", fp->tx); 
+    o.print("nx", fp->nx); 
+    o.print("rule length", fp->rule.length()); 
+    o.printEnd(); 
+  }
+}
+
+/*------------------------------------------------------------------*/
+/*------------------------------------------------------------------*/
+bool AzTrTreeFeat::resetParam(AzParam &p)
+{
+  p.swOn(&doCountRules, kw_doCountRules); 
+  p.swOn(&doCheckConsistency, kw_doCheckConsistency); 
+  bool beVerbose = false; 
+  p.swOn(&beVerbose, kw_opt_beVerbose); 
+  return beVerbose; 
+}
+
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::printParam(const AzOut &out) const
+{
+  if (out.isNull()) return; 
+
+  if (!doCountRules && !doCheckConsistency) {
+    return; 
+  }
+
+  AzPrint o(out); 
+  o.ppBegin("AzTrTreeFeat", "Feature management", ", "); 
+  o.printSw(kw_doCountRules, doCountRules); 
+  o.printSw(kw_doCheckConsistency, doCheckConsistency); 
+  o.ppEnd(); 
+}
+
+/*------------------------------------------------------------------*/
+void AzTrTreeFeat::printHelp(AzHelp &h) const
+{
+  h.begin(Azforest_config, "AzTrTreeFeat"); 
+  h.item_experimental(kw_doCountRules, help_doCountRules); 
+  h.item_experimental(kw_doCheckConsistency, help_doCheckConsistency); 
+  h.end(); 
+}
+
+
+
