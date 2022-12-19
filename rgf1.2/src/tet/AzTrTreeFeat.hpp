@@ -150,3 +150,33 @@ protected:
                 AzDataArray<AzIntArr> *aia_fx_dx) const; 
 
   int _update(const AzTrTree_ReadOnly *dtree, 
+                      int tx, 
+                      AzIntArr *ia_isActiveNode, /* output */
+                     /*---  for the tree already in the system  ---*/ 
+                     const int *featDef=NULL, 
+                     int featDef_len=0, 
+                     AzIntArr *ia_rmv_fx=NULL); 
+
+  void _getWeight(const AzTrTree_ReadOnly *dtree, 
+                 int tx, 
+                 AzDvect *v_w) const; /* output */
+
+  void _updateMatrix(const AzDataForTrTree *data, 
+                     const AzTrTreeEnsemble_ReadOnly *ens, 
+                     int old_f_num, 
+                     /*---  output  ---*/
+                     AzBmat *m_tran) const; 
+
+  void removeFeat(int removed_fx); 
+  int countNonzeroNodup(const AzDvect *v_w) const; 
+
+  int _update_with_new_trees(int old_t_num, 
+                  const AzTrTreeEnsemble_ReadOnly *ens); 
+  int _update_with_existing_trees(int old_t_num, 
+                   const AzTrTreeEnsemble_ReadOnly *ens, 
+                   AzIntArr *ia_rmv_fx); /* output */
+
+  bool resetParam(AzParam &param); 
+  void printParam(const AzOut &out) const; 
+}; 
+#endif 
