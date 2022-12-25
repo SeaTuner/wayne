@@ -192,4 +192,121 @@ int AzTree::leafNum() const
 /*--------------------------------------------------------*/
 void AzTree::clean_up()
 {
-  check
+  checkNodes("clean_up"); 
+
+  int nx; 
+  for (nx = 0; nx < nodes_used; ++nx) {
+    if (!nodes[nx].isLeaf()) continue; 
+
+    /*---  add non-leaf weights to the leaf weight ---*/
+    int px = nodes[nx].parent_nx; 
+    for ( ; ; ) {
+      if (px < 0) break; 
+      nodes[nx].weight += nodes[px].weight; 
+      px = nodes[px].parent_nx; 
+    }
+  }
+
+  for (nx = 0; nx < nodes_used; ++nx) {
+    if (nodes[nx].isLeaf()) continue; 
+    nodes[nx].weight = 0; /* zero-out non-leaf weights */
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzTree::finfo(AzIFarr *ifa_fx_count, 
+                   AzIFarr *ifa_fx_w) /* appended */
+const 
+{
+  int nx; 
+  for (nx = 0; nx < nodes_used; ++nx) {
+    if (!nodes[nx].isLeaf()) continue;
+    double w = nodes[nx].weight;  
+    int nx1 = nodes[nx].parent_nx; 
+    while(nx1 >= 0) {
+      ifa_fx_count->put(nodes[nx1].fx, 1); 
+      ifa_fx_w->put(nodes[nx1].fx, fabs(w)); 
+      nx1 = nodes[nx1].parent_nx; 
+    }
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzTree::finfo(AzIntArr *ia_fxs) const /* appended */
+{
+  int nx; 
+  for (nx = 0; nx < nodes_used; ++nx) {
+    if (nodes[nx].fx >= 0) {
+      ia_fxs->put(nodes[nx].fx); 
+    }
+  }
+}
+
+/* pairs of features used in the same path (from the root to the leaf */
+/*--------------------------------------------------------*/
+void AzTree::cooccurrences(AzIIFarr *iifa_fx1_fx2_count) const
+{
+  int nx; 
+  for (nx = 0; nx < nodes_used; ++nx) {
+    if (!nodes[nx].isLeaf()) continue; 
+
+    AzIntArr ia_fxs; 
+    int nx1 = nodes[nx].parent_nx; 
+    while(nx1>=0) {
+      if (nodes[nx1].fx >= 0) ia_fxs.put(nodes[nx1].fx); 
+      nx1 = nodes[nx1].parent_nx; 
+    }
+    ia_fxs.sort(true); 
+    const int *fxs = ia_fxs.point(); 
+    int ix1, ix2; 
+    for (ix1 = 0; ix1 < ia_fxs.size(); ++ix1) {
+      for (ix2 = ix1+1; ix2 < ia_fxs.size(); ++ix2) {
+        iifa_fx1_fx2_count->put(fxs[ix1], fxs[ix2], 1); 
+      }
+    }
+  }
+  iifa_fx1_fx2_count->squeeze_Sum(); 
+}
+
+/*--------------------------------------------------------*/
+void AzTree::genDesc(const AzSvFeatInfo *feat, 
+                  int nx, 
+                  AzBytArr *s) /* output */
+const
+{
+  s->reset(); 
+  if (feat == NULL) {
+    s->c("not_available"); 
+  }
+  _checkNode(nx, "AzTree::concatDesc"); 
+  if (nx == root_nx) {
+    s->c("ROOT"); 
+  }
+  else {
+    _genDesc(feat, nx, s); 
+  }
+}
+
+/*--------------------------------------------------------*/
+void AzTree::_genDesc(const AzSvFeatInfo *feat, 
+                      int nx, 
+                      AzBytArr *s) /* output */
+const
+{
+  int px = nodes[nx].parent_nx; 
+  if (px < 0) return; 
+
+  _genDesc(feat, px, s); 
+  if (s->getLen() > 0) {
+    s->c(";"); 
+  }
+  feat->concatDesc(nodes[px].fx, s); 
+  if (nodes[px].le_nx == nx) {
+    s->c("<="); 
+  }
+  else {
+    s->c(">"); 
+  }
+  s->cn(nodes[px].border_val, 5); 
+}
+
