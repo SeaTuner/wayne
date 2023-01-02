@@ -271,4 +271,23 @@ void AzTreeEnsemble::show_weights(const AzOut &out, AzSvFeatInfo *fi) const
   iifa_tx_nx_negaw.sort_Float(true); /* ascending order */
 
   AzPrint::writeln(out, "Positive weights -------------------"); 
-  int ix;
+  int ix; 
+  for (ix = 0; ix < iifa_tx_nx_posiw.size(); ++ix) {
+    int tx, nx; 
+    double w = iifa_tx_nx_posiw.get(ix, &tx, &nx); 
+    AzBytArr s_desc; 
+    t[tx]->genDesc(fi, nx, &s_desc); 
+    AzBytArr s; s.cn(w, 6, false); s.c(' '); s.c(&s_desc); 
+    AzPrint::writeln(out, s); 
+  }
+
+  AzPrint::writeln(out, "Negative weights -------------------"); 
+  for (ix = 0; ix < iifa_tx_nx_negaw.size(); ++ix) {
+    int tx, nx; 
+    double w = iifa_tx_nx_negaw.get(ix, &tx, &nx); 
+    AzBytArr s_desc; 
+    t[tx]->genDesc(fi, nx, &s_desc); 
+    AzBytArr s; s.cn(w, 6, false); s.c(' '); s.c(&s_desc); 
+    AzPrint::writeln(out, s); 
+  }
+}
